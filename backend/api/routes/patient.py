@@ -21,6 +21,13 @@ async def get_patient_dashboard(patient_id: str):
     if not patient:
         return {"error": "Patient not found"}
 
+    doctor = None
+    if patient.get("doctor_id"):
+        doctor = await fetch_one(
+            "SELECT id, name, specialty FROM doctors WHERE id = ?",
+            (patient["doctor_id"],)
+        )
+
     glucose = await fetch_all(
         "SELECT id, value_mmol, measurement_time, context FROM glucose_readings WHERE patient_id = ? ORDER BY measurement_time DESC LIMIT 30",
         (patient_id,)
@@ -56,6 +63,7 @@ async def get_patient_dashboard(patient_id: str):
 
     return {
         "patient": patient,
+        "doctor": doctor,
         "glucose_readings": glucose,
         "meals": meals,
         "med_logs": med_logs,

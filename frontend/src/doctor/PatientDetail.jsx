@@ -33,13 +33,15 @@ export default function PatientDetail({ patientId, onRefresh }) {
   if (loading) return <div className="p-8 text-center text-gray-400">Loading patient data...</div>
   if (!data) return <div className="p-8 text-center text-red-400">Failed to load patient data</div>
 
-  const { patient, medications, glucose_readings, med_adherence, alerts, recommendations, lifestyle_goals, referrals } = data
+  const { patient, medications, glucose_readings, med_logs, alerts, recommendations, lifestyle_goals, referrals } = data
 
   const avgGlucose = glucose_readings?.length
-    ? (glucose_readings.reduce((s, r) => s + r.value, 0) / glucose_readings.length).toFixed(1)
+    ? (glucose_readings.reduce((s, r) => s + r.value_mmol, 0) / glucose_readings.length).toFixed(1)
     : null
 
-  const adherencePct = med_adherence?.adherence_percentage ?? null
+  const adherencePct = med_logs?.length
+    ? Math.round(med_logs.filter(l => l.action === 'taken').length / med_logs.length * 100)
+    : null
 
   function metricColor(type, val) {
     if (type === 'glucose') return val > 10 ? 'text-red-600 bg-red-50' : val > 8 ? 'text-yellow-600 bg-yellow-50' : 'text-green-600 bg-green-50'
@@ -100,7 +102,7 @@ export default function PatientDetail({ patientId, onRefresh }) {
         </div>
         <div className="rounded-xl p-4 text-blue-600 bg-blue-50">
           <p className="text-xs font-medium opacity-70">Active Alerts</p>
-          <p className="text-2xl font-bold">{alerts?.filter(a => !a.acknowledged).length ?? 0}</p>
+          <p className="text-2xl font-bold">{alerts?.filter(a => !a.acknowledged_by_doctor).length ?? 0}</p>
         </div>
       </div>
 
@@ -113,10 +115,10 @@ export default function PatientDetail({ patientId, onRefresh }) {
       )}
 
       {/* 4. Medication Adherence Grid */}
-      {med_adherence?.grid && (
+      {med_logs?.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <h3 className="font-bold text-gray-800 mb-3">Medication Adherence</h3>
-          <MedAdherenceGrid grid={med_adherence.grid} />
+          <MedAdherenceGrid medLogs={med_logs} medications={medications} />
         </div>
       )}
 
@@ -155,18 +157,18 @@ export default function PatientDetail({ patientId, onRefresh }) {
           <h3 className="font-bold text-gray-800 mb-3">Recent Alerts</h3>
           <div className="space-y-2">
             {alerts.map(a => (
-              <div key={a.id} className={`flex items-center justify-between p-3 rounded-lg border ${a.acknowledged ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
+              <div key={a.id} className={`flex items-center justify-between p-3 rounded-lg border ${a.acknowledged_by_doctor ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex items-center gap-2">
-                  {a.acknowledged
+                  {a.acknowledged_by_doctor
                     ? <CheckCircle2 className="w-4 h-4 text-green-500" />
                     : <AlertTriangle className="w-4 h-4 text-red-500" />
                   }
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{a.message}</p>
+                    <p className="text-sm font-medium text-gray-800">{a.message || a.title}</p>
                     <p className="text-xs text-gray-500">{a.severity} · {new Date(a.created_at).toLocaleDateString('en-SG')}</p>
                   </div>
                 </div>
-                {!a.acknowledged && (
+                {!a.acknowledged_by_doctor && (
                   <button
                     onClick={() => handleAcknowledge(a.id)}
                     className="text-xs bg-white border px-3 py-1 rounded-lg hover:bg-gray-50 transition font-medium"
@@ -184,7 +186,7 @@ export default function PatientDetail({ patientId, onRefresh }) {
       <RecommendationComposer
         patientId={patientId}
         patientName={patient.name}
-        draftText={analysisData?.recommendations?.[0]?.text || ''}
+        draftText={analysisData?.recommendations?.[0]?.action || analysisData?.recommendations?.[0]?.text || ''}
       />
 
       {/* Modals */}

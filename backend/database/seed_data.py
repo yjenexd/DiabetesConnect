@@ -3,19 +3,24 @@ import asyncio
 import os
 import sys
 from datetime import datetime, timedelta
-from uuid import uuid4
+from itertools import count
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.db import init_db, get_db
 
-def uid():
-    return str(uuid4())[:8]
+# Deterministic ID generator so seeded rows are stable across machines/runs.
+_id_counter = count(1)
 
-async def seed_all():
+
+def uid() -> str:
+    return f"{next(_id_counter):08x}"
+
+async def seed_all(*, init_db_already_ran: bool = False):
     """Populate the database with demo data."""
-    await init_db()
+    if not init_db_already_ran:
+        await init_db()
     db = await get_db()
     try:
         # Check if already seeded
@@ -267,6 +272,27 @@ async def seed_all():
         )
         print("✓ Doctor actions, goals, referrals, and recommendations seeded")
 
+        # ── Weekly report (doctor-facing data) ──
+        # Seed at least one weekly report so the doctor detail view has a complete narrative out of the box.
+        wr_id = uid()
+        week_start = base_date.date().isoformat()  # 2026-03-02
+        week_end = (base_date + timedelta(days=13)).date().isoformat()  # 2026-03-15
+        await db.execute(
+            "INSERT INTO weekly_reports (id, patient_id, week_start, week_end, summary_text, key_metrics, risk_level, recommendations, generated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                wr_id,
+                "ah_kow_001",
+                week_start,
+                week_end,
+                "Ah Kow (62M, Type 2) shows an upward fasting glucose trend over 14 days with partial improvement in the second week. Evening medication adherence is inconsistent and diet is heavy on high-carb hawker meals.",
+                '[{"finding":"Fasting glucose rose from 8.2 to 11.4 mmol/L then eased to 10.2","severity":"critical","data_points":"2026-03-02: 8.2, 2026-03-12: 11.4, 2026-03-15: 10.2"}]',
+                "high",
+                '[{"priority":1,"action":"Improve evening Glipizide adherence","rationale":"Missed evening doses correlate with higher fasting readings"},{"priority":2,"action":"Reduce high-carb hawker meals","rationale":"Repeated >70g carb meals contribute to elevated post-meal glucose"}]',
+                (base_date + timedelta(days=12, hours=10)).isoformat(),
+            ),
+        )
+        print("✓ Weekly reports seeded")
+
         # ── Pre-loaded chat messages for Ah Kow ──
         chat_msgs = [
             (uid(), "ah_kow_001", "patient", "我今天午餐吃了炒粿条", "mandarin",
@@ -296,4 +322,3 @@ async def seed_all():
 
 if __name__ == "__main__":
     asyncio.run(seed_all())
-

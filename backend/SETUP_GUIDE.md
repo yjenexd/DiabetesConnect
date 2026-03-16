@@ -149,6 +149,7 @@ OPENAI_API_KEY=sk-xxxxx               # Get from platform.openai.com (for Whispe
 DATABASE_URL=sqlite:///./diabetesconnect.db
 DEBUG=true
 CORS_ORIGINS=http://localhost:5173
+SEED_ON_STARTUP=true                  # Set false for prod-like runs
 ```
 
 **Assign one person to create all API accounts before the hackathon starts.**

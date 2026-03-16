@@ -2,6 +2,15 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '' })
 
+function getErrorMessage(error, fallbackMessage = 'Request failed') {
+  return error?.response?.data?.detail || error?.response?.data?.error || error?.message || fallbackMessage
+}
+
+export function connectChatWebSocket(patientId) {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return new WebSocket(`${protocol}://${window.location.host}/ws/chat/${patientId}`)
+}
+
 // ── Patient APIs ──
 
 export async function getPatientDashboard(patientId) {
@@ -9,7 +18,7 @@ export async function getPatientDashboard(patientId) {
     const { data } = await api.get(`/api/patients/${patientId}/dashboard`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not load dashboard') }
   }
 }
 
@@ -24,7 +33,7 @@ export async function sendChatMessage(patientId, message, inputType = 'text', au
     })
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not send message') }
   }
 }
 
@@ -33,7 +42,7 @@ export async function getChatHistory(patientId) {
     const { data } = await api.get(`/api/chat/history/${patientId}`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not load chat history') }
   }
 }
 

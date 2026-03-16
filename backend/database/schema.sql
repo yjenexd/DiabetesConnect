@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS referrals (
     action_id TEXT,
     referral_type TEXT,
     description TEXT,
-    appointment_date TEXT,
+    appointment_date TIMESTAMP,
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (patient_id) REFERENCES patients(id),
@@ -165,8 +165,8 @@ CREATE TABLE IF NOT EXISTS history_requests (
 CREATE TABLE IF NOT EXISTS weekly_reports (
     id TEXT PRIMARY KEY,
     patient_id TEXT NOT NULL,
-    week_start TEXT,
-    week_end TEXT,
+    week_start TIMESTAMP,
+    week_end TIMESTAMP,
     summary_text TEXT,
     key_metrics TEXT,
     risk_level TEXT,
@@ -193,3 +193,8 @@ CREATE INDEX IF NOT EXISTS idx_med_logs_patient ON med_logs(patient_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id);
 CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_patient ON recommendations(patient_id);
+
+-- High-impact indexes for list endpoints and ordering
+CREATE INDEX IF NOT EXISTS idx_patients_doctor ON patients(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_glucose_patient_time ON glucose_readings(patient_id, measurement_time);
+CREATE INDEX IF NOT EXISTS idx_alerts_patient_created_at ON alerts(patient_id, created_at);
