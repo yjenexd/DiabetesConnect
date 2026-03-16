@@ -46,6 +46,12 @@ async def get_doctor_patients(doctor_id: str, sort_by: str = "urgency", filter_s
         )
         alert_severity = latest_alert["severity"] if latest_alert else "none"
 
+        # Unacknowledged alerts count
+        unack_row = await fetch_one(
+            "SELECT COUNT(*) as cnt FROM alerts WHERE patient_id = ? AND acknowledged_by_doctor = 0", (pid,)
+        )
+        unacknowledged_alerts = unack_row["cnt"] if unack_row else 0
+
         # Risk level
         risk = "low"
         if latest_glucose and latest_glucose > 10:
@@ -62,9 +68,11 @@ async def get_doctor_patients(doctor_id: str, sort_by: str = "urgency", filter_s
 
         enriched.append({
             **p,
+            "patient_id": pid,
             "latest_glucose": latest_glucose,
             "adherence_pct": adherence_pct,
             "latest_alert_severity": alert_severity,
+            "unacknowledged_alerts": unacknowledged_alerts,
             "risk_level": risk,
         })
 
@@ -72,7 +80,7 @@ async def get_doctor_patients(doctor_id: str, sort_by: str = "urgency", filter_s
     severity_order = {"high": 0, "medium": 1, "low": 2}
     if sort_by == "urgency":
         enriched.sort(key=lambda x: severity_order.get(x["risk_level"], 3))
-    elif sort_by == "alphabetical":
+    elif sort_by in ("alphabetical", "name"):
         enriched.sort(key=lambda x: x["name"])
 
     return {"patients": enriched, "total_count": len(enriched)}
@@ -185,9 +193,10 @@ async def create_doctor_action(patient_id: str, req: ActionRequest, doctor_id: s
     # Create associated records
     if req.action_type == "prescribe_medication":
         med_id = uid()
+        med_name = req.action_data.get("medication_name") or req.action_data.get("name", "")
         await execute(
             "INSERT INTO medications (id, patient_id, name, dosage, frequency, prescribed_by, prescribed_at, active) VALUES (?,?,?,?,?,?,?,?)",
-            (med_id, patient_id, req.action_data.get("name", ""), req.action_data.get("dosage", ""),
+            (med_id, patient_id, med_name, req.action_data.get("dosage", ""),
              req.action_data.get("frequency", ""), doctor_id, datetime.now().isoformat(), 1)
         )
 
