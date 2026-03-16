@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Send, Mic, Camera, Bot, User, ArrowLeft } from 'lucide-react'
+import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench } from 'lucide-react'
 import { sendChatMessage, getChatHistory } from '../shared/api'
 import VoiceRecorder from './VoiceRecorder'
 import PhotoUpload from './PhotoUpload'
@@ -13,38 +13,87 @@ export default function ChatInterface() {
   const [loading, setLoading] = useState(false)
   const [showVoice, setShowVoice] = useState(false)
   const [showPhoto, setShowPhoto] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [requestError, setRequestError] = useState('')
+  const [lastAttempt, setLastAttempt] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [id])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   async function loadHistory() {
-    const { data } = await getChatHistory(id)
+    setHistoryError('')
+    const { data, error } = await getChatHistory(id)
+    if (error) {
+      setHistoryError('Could not load earlier messages. You can still start chatting.')
+      return
+    }
+
     if (data?.messages) {
       setMessages(data.messages.map(m => ({
         role: m.role === 'patient' ? 'user' : 'assistant',
         content: m.content,
         timestamp: m.timestamp,
+        toolsCalled: [],
+        alertsGenerated: [],
       })))
     }
   }
 
-  async function handleSend(text = input, inputType = 'text', audioBase64 = null, imageBase64 = null) {
-    if (!text?.trim() && !audioBase64 && !imageBase64) return
+  function buildAssistantMessage(data, fallbackContent) {
+    return {
+      role: 'assistant',
+      content: data?.response || fallbackContent,
+      timestamp: new Date().toISOString(),
+      toolsCalled: data?.tools_called || [],
+      alertsGenerated: data?.alerts_generated || [],
+    }
+  }
 
-    const userMsg = { role: 'user', content: text || (audioBase64 ? '🎤 Voice message' : '📷 Photo'), timestamp: new Date().toISOString() }
+  async function handleSend(text = input, inputType = 'text', audioBase64 = null, imageBase64 = null) {
+    if (loading || (!text?.trim() && !audioBase64 && !imageBase64)) return
+
+    const trimmedText = text?.trim() || ''
+    const attempt = {
+      text: trimmedText,
+      inputType,
+      audioBase64,
+      imageBase64,
+    }
+
+    const userMsg = {
+      role: 'user',
+      content: trimmedText || (audioBase64 ? 'Voice message' : 'Meal photo'),
+      timestamp: new Date().toISOString(),
+    }
+
+    setRequestError('')
+    setLastAttempt(attempt)
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
-    const { data, error } = await sendChatMessage(id, text || '', inputType, audioBase64, imageBase64)
+    const { data, error } = await sendChatMessage(id, trimmedText, inputType, audioBase64, imageBase64)
     setLoading(false)
 
     if (data?.response) {
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: new Date().toISOString() }])
+      setMessages(prev => [...prev, buildAssistantMessage(data, '')])
     } else {
-      setMessages(prev => [...prev, { role: 'assistant', content: error || 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() }])
+      const fallbackMessage = error || 'Sorry, something went wrong. Please try again.'
+      setRequestError('The message did not go through. You can retry it.')
+      setMessages(prev => [...prev, buildAssistantMessage(null, fallbackMessage)])
     }
+  }
+
+  function retryLastAttempt() {
+    if (!lastAttempt || loading) return
+
+    handleSend(
+      lastAttempt.text,
+      lastAttempt.inputType,
+      lastAttempt.audioBase64,
+      lastAttempt.imageBase64,
+    )
   }
 
   function handleVoiceComplete(audioBase64) {
@@ -72,6 +121,26 @@ export default function ChatInterface() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {historyError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="flex items-start justify-between gap-3">
+              <p>{historyError}</p>
+              <button onClick={loadHistory} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-medium text-amber-800">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            </div>
+          </div>
+        )}
+        {requestError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex items-start justify-between gap-3">
+              <p>{requestError}</p>
+              <button onClick={retryLastAttempt} className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 font-medium text-red-700">
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            </div>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="text-center text-gray-400 mt-10">
             <Bot className="w-12 h-12 mx-auto mb-2 text-primary-300" />
@@ -96,6 +165,31 @@ export default function ChatInterface() {
                 </span>
               </div>
               <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === 'assistant' && Boolean(msg.toolsCalled?.length || msg.alertsGenerated?.length) && (
+                <div className="mt-3 space-y-2">
+                  {msg.toolsCalled?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {msg.toolsCalled.map(toolName => (
+                        <span key={`${i}-${toolName}`} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-1 text-[11px] text-primary-700">
+                          <Wrench className="h-3 w-3" /> {toolName}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {msg.alertsGenerated?.length > 0 && (
+                    <div className="rounded-xl bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                      <div className="mb-1 flex items-center gap-1 font-medium">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Care alerts raised
+                      </div>
+                      <div className="space-y-1">
+                        {msg.alertsGenerated.map((alert, alertIndex) => (
+                          <p key={`${i}-alert-${alertIndex}`}>{alert.title || alert.description || 'Health alert created'}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -119,24 +213,25 @@ export default function ChatInterface() {
 
       {/* Input bar */}
       <div className="bg-white border-t px-3 py-3 flex items-center gap-2 shrink-0">
-        <button onClick={() => setShowPhoto(true)} className="p-2 text-gray-500 hover:text-primary-600 transition" title="Take photo">
+        <button onClick={() => setShowPhoto(true)} disabled={loading} className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition hover:bg-primary-50 hover:text-primary-600 disabled:opacity-40" title="Take photo">
           <Camera className="w-6 h-6" />
         </button>
-        <button onClick={() => setShowVoice(true)} className="p-2 text-gray-500 hover:text-primary-600 transition" title="Voice message">
+        <button onClick={() => setShowVoice(true)} disabled={loading} className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition hover:bg-primary-50 hover:text-primary-600 disabled:opacity-40" title="Voice message">
           <Mic className="w-6 h-6" />
         </button>
         <input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSend()}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
           placeholder="Type a message..."
           className="flex-1 border rounded-full px-4 py-2 text-[16px] focus:outline-none focus:ring-2 focus:ring-primary-400"
+          disabled={loading}
         />
         <button
           onClick={() => handleSend()}
           disabled={!input.trim() || loading}
-          className="p-2 bg-primary-600 text-white rounded-full disabled:opacity-50 transition hover:bg-primary-700"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-primary-600 text-white transition hover:bg-primary-700 disabled:opacity-50"
         >
           <Send className="w-5 h-5" />
         </button>

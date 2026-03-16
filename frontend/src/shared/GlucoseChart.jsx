@@ -1,17 +1,29 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, ReferenceArea } from 'recharts'
 
 export default function GlucoseChart({ readings = [], height = 250 }) {
-  // Process readings for chart — take last 14 data points, sorted by time
-  const sorted = [...readings]
-    .sort((a, b) => new Date(a.measurement_time) - new Date(b.measurement_time))
-    .slice(-14)
+  const byDay = new Map()
 
-  const data = sorted.map(r => ({
-    date: new Date(r.measurement_time).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
-    time: new Date(r.measurement_time).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' }),
-    value: r.value_mmol,
-    context: r.context,
-  }))
+  readings.forEach((reading) => {
+    if (!reading.measurement_time) return
+    const dayKey = reading.measurement_time.slice(0, 10)
+    const existing = byDay.get(dayKey) || { values: [], contexts: new Set() }
+    existing.values.push(Number(reading.value_mmol))
+    if (reading.context) existing.contexts.add(reading.context)
+    byDay.set(dayKey, existing)
+  })
+
+  const data = [...byDay.entries()]
+    .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+    .slice(-7)
+    .map(([dayKey, dayData]) => {
+      const average = dayData.values.reduce((sum, value) => sum + value, 0) / dayData.values.length
+      return {
+        date: new Date(`${dayKey}T00:00:00`).toLocaleDateString('en-SG', { weekday: 'short' }),
+        fullDate: new Date(`${dayKey}T00:00:00`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
+        value: Number(average.toFixed(1)),
+        contexts: [...dayData.contexts].join(', '),
+      }
+    })
 
   return (
     <div className="w-full">
@@ -23,7 +35,10 @@ export default function GlucoseChart({ readings = [], height = 250 }) {
           <Tooltip
             formatter={(value) => [`${value} mmol/L`]}
             labelFormatter={(label, payload) => {
-              if (payload && payload[0]) return `${label} ${payload[0].payload.time} (${payload[0].payload.context})`
+              if (payload && payload[0]) {
+                const { fullDate, contexts } = payload[0].payload
+                return contexts ? `${fullDate} (${contexts})` : fullDate
+              }
               return label
             }}
           />

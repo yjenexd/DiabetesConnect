@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Send, Eye, Trash2, Loader2 } from 'lucide-react'
 import { draftRecommendation, approveRecommendation } from '../shared/api'
 import DashboardPreview from './DashboardPreview'
@@ -11,6 +11,11 @@ export default function RecommendationComposer({ patientId, patientName, draftTe
   const [recId, setRecId] = useState(null)
 
   const MAX_CHARS = 500
+
+  // Update draft text when AI analysis generates a recommendation
+  useEffect(() => {
+    if (draftText && !text) setText(draftText)
+  }, [draftText])
 
   async function handleSend() {
     if (!text.trim()) return

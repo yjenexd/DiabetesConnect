@@ -8,40 +8,58 @@ const TABS = {
   medication: { label: 'Log Medication', icon: Pill, color: 'text-green-500' },
 }
 
-export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) {
+export default function ManualLogModal({ mode, patientId, medications = [], onClose, onSuccess }) {
   const [tab, setTab] = useState(mode || 'meal')
   const [loading, setLoading] = useState(false)
-  const [mealForm, setMealForm] = useState({ description: '', meal_type: 'lunch', notes: '' })
-  const [glucoseForm, setGlucoseForm] = useState({ value: '', context: 'before_meal', notes: '' })
-  const [medForm, setMedForm] = useState({ medication_name: '', taken: true })
+  const [success, setSuccess] = useState(false)
+  const [mealForm, setMealForm] = useState({ food_name: '', calories_estimate: '', carbs_grams: '', meal_type: 'lunch' })
+  const [glucoseForm, setGlucoseForm] = useState({ value_mmol: '', context: 'pre_meal' })
+  const [medForm, setMedForm] = useState({ medication_name: medications[0]?.name || '', action: 'taken' })
 
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
     let result
     if (tab === 'meal') {
-      result = await logMeal(patientId, mealForm)
+      result = await logMeal(patientId, {
+        food_name: mealForm.food_name,
+        calories_estimate: mealForm.calories_estimate ? parseInt(mealForm.calories_estimate, 10) : null,
+        carbs_grams: mealForm.carbs_grams ? parseFloat(mealForm.carbs_grams) : null,
+        meal_type: mealForm.meal_type,
+      })
     } else if (tab === 'glucose') {
-      result = await logGlucose(patientId, { ...glucoseForm, value: parseFloat(glucoseForm.value) })
+      result = await logGlucose(patientId, {
+        value_mmol: parseFloat(glucoseForm.value_mmol),
+        context: glucoseForm.context,
+      })
     } else {
       result = await logMedication(patientId, medForm)
     }
     setLoading(false)
     if (!result.error) {
-      onSuccess?.()
-      onClose()
+      setSuccess(true)
+      window.setTimeout(() => {
+        onSuccess?.()
+        onClose()
+      }, 900)
     } else {
       alert(result.error)
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
       <div className="bg-white w-full sm:w-96 sm:rounded-2xl rounded-t-2xl p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-gray-800">Quick Log</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
+
+        {success && (
+          <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+            Saved successfully.
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
@@ -63,14 +81,37 @@ export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) 
           {tab === 'meal' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">What did you eat?</label>
-                <textarea
-                  value={mealForm.description}
-                  onChange={e => setMealForm({ ...mealForm, description: e.target.value })}
-                  placeholder="e.g. chicken rice with extra chilli"
-                  className="w-full border rounded-xl px-4 py-3 text-[16px] resize-none h-20 focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                <label className="block text-sm font-medium text-gray-700 mb-1">Food name</label>
+                <input
+                  value={mealForm.food_name}
+                  onChange={e => setMealForm({ ...mealForm, food_name: e.target.value })}
+                  placeholder="e.g. chicken rice"
+                  className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                   required
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Calories</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={mealForm.calories_estimate}
+                    onChange={e => setMealForm({ ...mealForm, calories_estimate: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Carbs (g)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={mealForm.carbs_grams}
+                    onChange={e => setMealForm({ ...mealForm, carbs_grams: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Meal type</label>
@@ -85,14 +126,6 @@ export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) 
                   <option value="snack">Snack</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-                <input
-                  value={mealForm.notes}
-                  onChange={e => setMealForm({ ...mealForm, notes: e.target.value })}
-                  className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
-                />
-              </div>
             </>
           )}
 
@@ -105,8 +138,8 @@ export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) 
                   step="0.1"
                   min="1"
                   max="35"
-                  value={glucoseForm.value}
-                  onChange={e => setGlucoseForm({ ...glucoseForm, value: e.target.value })}
+                  value={glucoseForm.value_mmol}
+                  onChange={e => setGlucoseForm({ ...glucoseForm, value_mmol: e.target.value })}
                   placeholder="e.g. 7.8"
                   className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                   required
@@ -120,18 +153,10 @@ export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) 
                   className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                 >
                   <option value="fasting">Fasting</option>
-                  <option value="before_meal">Before meal</option>
-                  <option value="after_meal">After meal (2h)</option>
+                  <option value="pre_meal">Before meal</option>
+                  <option value="post_meal">After meal (2h)</option>
                   <option value="bedtime">Bedtime</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-                <input
-                  value={glucoseForm.notes}
-                  onChange={e => setGlucoseForm({ ...glucoseForm, notes: e.target.value })}
-                  className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
-                />
               </div>
             </>
           )}
@@ -140,24 +165,33 @@ export default function ManualLogModal({ mode, patientId, onClose, onSuccess }) 
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Medication name</label>
-                <input
+                <select
                   value={medForm.medication_name}
                   onChange={e => setMedForm({ ...medForm, medication_name: e.target.value })}
-                  placeholder="e.g. Metformin 500mg"
                   className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                   required
-                />
+                >
+                  <option value="">Select medication</option>
+                  {medications.map((medication) => (
+                    <option key={medication.id} value={medication.name}>{medication.name}</option>
+                  ))}
+                </select>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-gray-700">Taken?</label>
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setMedForm({ ...medForm, taken: !medForm.taken })}
-                  className={`relative w-12 h-6 rounded-full transition ${medForm.taken ? 'bg-green-500' : 'bg-gray-300'}`}
+                  onClick={() => setMedForm({ ...medForm, action: 'taken' })}
+                  className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${medForm.action === 'taken' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600'}`}
                 >
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${medForm.taken ? 'left-6' : 'left-0.5'}`} />
+                  Taken ✓
                 </button>
-                <span className="text-sm text-gray-600">{medForm.taken ? 'Yes' : 'No'}</span>
+                <button
+                  type="button"
+                  onClick={() => setMedForm({ ...medForm, action: 'skipped' })}
+                  className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${medForm.action === 'skipped' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600'}`}
+                >
+                  Skipped ✗
+                </button>
               </div>
             </>
           )}

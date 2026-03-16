@@ -11,17 +11,17 @@ export default function FloatingActionButton({ onSelect }) {
   ]
 
   return (
-    <div className="fixed bottom-20 right-4 z-40">
+    <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
       {/* Expanded actions */}
       {open && (
         <>
           <div className="fixed inset-0 bg-black/20" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-16 right-0 flex flex-col gap-3 items-end mb-2">
+          <div className="absolute bottom-20 left-1/2 mb-2 flex -translate-x-1/2 flex-col gap-3 items-center">
             {actions.map(a => (
               <button
                 key={a.id}
                 onClick={() => { setOpen(false); onSelect(a.id) }}
-                className="flex items-center gap-2 animate-fade-in"
+                className="flex items-center gap-2"
               >
                 <span className="bg-white shadow-md rounded-lg px-3 py-1.5 text-sm font-medium text-gray-700">
                   {a.label}
@@ -38,7 +38,7 @@ export default function FloatingActionButton({ onSelect }) {
       {/* Main button */}
       <button
         onClick={() => setOpen(!open)}
-        className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
+        className={`h-16 w-16 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
           open ? 'bg-gray-600 rotate-45' : 'bg-primary-600 hover:bg-primary-700'
         } text-white`}
       >
