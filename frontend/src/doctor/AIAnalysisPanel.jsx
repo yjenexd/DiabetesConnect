@@ -85,11 +85,11 @@ export default function AIAnalysisPanel({ patientId, analysisData, onAnalysisGen
           )}
 
           {/* Recommended Actions */}
-          {analysisData.recommended_actions?.length > 0 && (
+          {(analysisData.recommended_actions || analysisData.recommendations)?.length > 0 && (
             <div className="border rounded-lg p-4">
               <h4 className="font-semibold text-gray-700 mb-2">Recommended Actions</h4>
               <ol className="list-decimal list-inside space-y-1.5">
-                {analysisData.recommended_actions.map((a, i) => (
+                {(analysisData.recommended_actions || analysisData.recommendations).map((a, i) => (
                   <li key={i} className="text-sm text-gray-600">
                     {a.text || a.action || (typeof a === 'string' ? a : JSON.stringify(a))}
                   </li>

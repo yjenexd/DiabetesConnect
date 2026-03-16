@@ -67,10 +67,10 @@ export default function DashboardPreview({ patientId, pendingRecommendation, pen
             )}
 
             {/* Med adherence */}
-            {data.med_adherence?.grid && (
+            {data.med_logs?.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border p-4">
                 <h3 className="font-bold text-gray-800 mb-2 text-sm">Medication Adherence</h3>
-                <MedAdherenceGrid grid={data.med_adherence.grid} />
+                <MedAdherenceGrid medLogs={data.med_logs} medications={data.medications} />
               </div>
             )}
 

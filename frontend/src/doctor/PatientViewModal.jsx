@@ -42,15 +42,15 @@ export default function PatientViewModal({ patientId, onClose }) {
                 <div className="bg-white rounded-xl p-3 shadow-sm border text-center">
                   <p className="text-xs text-gray-500">Latest Glucose</p>
                   <p className="text-xl font-bold text-primary-600">
-                    {data.glucose_readings?.[data.glucose_readings.length - 1]?.value || '—'}
+                    {data.glucose_readings?.[data.glucose_readings.length - 1]?.value_mmol || '—'}
                   </p>
                   <p className="text-xs text-gray-400">mmol/L</p>
                 </div>
                 <div className="bg-white rounded-xl p-3 shadow-sm border text-center">
                   <p className="text-xs text-gray-500">Med Adherence</p>
                   <p className="text-xl font-bold text-green-600">
-                    {data.med_adherence?.adherence_percentage != null
-                      ? `${Math.round(data.med_adherence.adherence_percentage)}%`
+                    {data.med_logs?.length
+                      ? `${Math.round(data.med_logs.filter(l => l.action === 'taken').length / data.med_logs.length * 100)}%`
                       : '—'}
                   </p>
                   <p className="text-xs text-gray-400">this week</p>
@@ -76,10 +76,10 @@ export default function PatientViewModal({ patientId, onClose }) {
               )}
 
               {/* Med Adherence */}
-              {data.med_adherence?.grid && (
+              {data.med_logs?.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border p-4">
                   <h3 className="font-bold text-gray-800 text-sm mb-2">Medication Adherence</h3>
-                  <MedAdherenceGrid grid={data.med_adherence.grid} />
+                  <MedAdherenceGrid medLogs={data.med_logs} medications={data.medications} />
                 </div>
               )}
 
