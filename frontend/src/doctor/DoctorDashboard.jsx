@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users } from 'lucide-react'
+import { Users, Sun, Moon } from 'lucide-react'
 import { getDoctorPatients } from '../shared/api'
+import { useTheme } from '../shared/ThemeContext'
 import PatientList from './PatientList'
 import PatientDetail from './PatientDetail'
 
@@ -12,6 +13,7 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true)
 
   const doctorId = 'dr_tan_001'
+  const { dark, toggle } = useTheme()
 
   const loadPatients = useCallback(async () => {
     setLoading(true)
@@ -32,9 +34,14 @@ export default function DoctorDashboard() {
               <Users className="w-5 h-5 text-primary-600" />
               <h1 className="text-lg font-bold text-gray-800">My Patients</h1>
             </div>
-            <span className="bg-primary-100 text-primary-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {patients.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-primary-100 text-primary-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                {patients.length}
+              </span>
+              <button onClick={toggle} className="text-gray-400 hover:text-gray-600 transition">
+                {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Sort */}
