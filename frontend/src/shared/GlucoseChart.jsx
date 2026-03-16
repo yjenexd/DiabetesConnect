@@ -17,9 +17,10 @@ export default function GlucoseChart({ readings = [], height = 250 }) {
     .slice(-7)
     .map(([dayKey, dayData]) => {
       const average = dayData.values.reduce((sum, value) => sum + value, 0) / dayData.values.length
+      const dateObj = new Date(`${dayKey}T00:00:00`)
       return {
-        date: new Date(`${dayKey}T00:00:00`).toLocaleDateString('en-SG', { weekday: 'short' }),
-        fullDate: new Date(`${dayKey}T00:00:00`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
+        date: dateObj.toLocaleDateString('en-SG', { day: 'numeric', month: 'short' }),
+        fullDate: dateObj.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' }),
         value: Number(average.toFixed(1)),
         contexts: [...dayData.contexts].join(', '),
       }

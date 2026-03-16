@@ -5,7 +5,7 @@ from uuid import uuid4
 from agents.state import PatientChatState
 from agents.prompts import get_agent1_prompt, AGENT3_SYSTEM_PROMPT, TOOL_DEFINITIONS
 from agents.tools import execute_tool
-from services.claude_service import chat_with_tools, check_anomalies
+from services.claude_service import chat_with_tools, check_anomalies, analyse_meal_photo
 from services.sealion_service import understand_input, localise_response
 from services.whisper_service import transcribe_audio
 from database.db import execute, fetch_all
@@ -31,6 +31,25 @@ async def run_patient_chat(state: PatientChatState) -> PatientChatState:
         state["transcribed_text"] = state.get("raw_input", "")
 
     text_input = state["transcribed_text"]
+
+    # ── Step 1b: Claude Vision (if photo) ──
+    if state.get("input_type") == "photo" and state.get("image_base64"):
+        try:
+            vision_result = await analyse_meal_photo(state["image_base64"])
+            food = vision_result.get("food_name", "Unknown food")
+            cal = vision_result.get("calories", 0)
+            carbs = vision_result.get("carbs_grams", 0)
+            protein = vision_result.get("protein_grams", 0)
+            fat = vision_result.get("fat_grams", 0)
+            context = vision_result.get("cultural_context", "hawker_food")
+            photo_summary = (
+                f"Photo analysis: {food} (~{cal} cal, {carbs}g carbs, {protein}g protein, {fat}g fat, "
+                f"context: {context}). The user sent a food photo."
+            )
+            text_input = photo_summary
+            state["transcribed_text"] = photo_summary
+        except Exception:
+            pass  # Fall through with original text_input
 
     # ── Step 2: SEA-LION understand ──
     try:
@@ -90,6 +109,13 @@ async def run_patient_chat(state: PatientChatState) -> PatientChatState:
         state["english_response"] = result.get("text_response", "I've noted that for you!")
 
     state["tool_results"] = all_tool_results
+
+    # ── Collect pending meal confirmations ──
+    pending_meals = []
+    for r in all_tool_results:
+        if r.get("result", {}).get("pending_confirmation"):
+            pending_meals.append(r["result"])
+    state["pending_meals"] = pending_meals
 
     # ── Step 5: Agent 3 — Proactive monitor ──
     if all_tool_results:

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from agents.graph_patient import run_patient_chat
+from agents.tools import confirm_log_meal
 from database.db import fetch_all
 from services.sealion_service import understand_input
 
@@ -37,7 +38,34 @@ async def send_chat_message(req: ChatRequest):
         "tools_called": [t["tool"] for t in result.get("tool_results", [])],
         "alerts_generated": result.get("agent3_alerts", []),
         "transcribed_text": result.get("transcribed_text", ""),
+        "pending_meals": result.get("pending_meals", []),
     }
+
+
+class MealConfirmRequest(BaseModel):
+    food_name: str
+    calories_estimate: int = 0
+    carbs_grams: float = 0.0
+    protein_grams: float = 0.0
+    fat_grams: float = 0.0
+    meal_type: str = "meal"
+    cultural_context: str = "hawker_food"
+
+
+@router.post("/patients/{patient_id}/meals/confirm")
+async def confirm_meal(patient_id: str, meal: MealConfirmRequest):
+    """Confirm and save a meal that was detected by the chatbot."""
+    result = await confirm_log_meal(
+        patient_id=patient_id,
+        food_name=meal.food_name,
+        calories_estimate=meal.calories_estimate,
+        carbs_grams=meal.carbs_grams,
+        protein_grams=meal.protein_grams,
+        fat_grams=meal.fat_grams,
+        meal_type=meal.meal_type,
+        cultural_context=meal.cultural_context,
+    )
+    return result
 
 
 @router.get("/chat/history/{patient_id}")
