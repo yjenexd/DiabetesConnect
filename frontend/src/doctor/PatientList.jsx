@@ -12,7 +12,7 @@ export default function PatientList({ patients = [], selectedId, onSelect }) {
     else parts.push('Glucose stable')
 
     if (p.adherence_pct != null && p.adherence_pct < 80) parts.push(`${Math.round(p.adherence_pct)}% adherence`)
-    if (p.unacknowledged_alerts > 0) parts.push(`${p.unacknowledged_alerts} alert${p.unacknowledged_alerts > 1 ? 's' : ''}`)
+    if (p.latest_alert_severity && p.latest_alert_severity !== 'none') parts.push(`Alert: ${p.latest_alert_severity}`)
 
     return parts.join(' · ') || 'On track'
   }
@@ -25,10 +25,10 @@ export default function PatientList({ patients = [], selectedId, onSelect }) {
     <div className="divide-y">
       {patients.map(p => (
         <button
-          key={p.patient_id}
-          onClick={() => onSelect(p.patient_id)}
+          key={p.id}
+          onClick={() => onSelect(p.id)}
           className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition ${
-            selectedId === p.patient_id ? 'bg-primary-50 border-l-4 border-primary-600' : ''
+            selectedId === p.id ? 'bg-primary-50 border-l-4 border-primary-600' : ''
           }`}
         >
           <div className="flex items-center gap-2">

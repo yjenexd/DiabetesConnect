@@ -623,6 +623,8 @@ Get chat history for a patient.
 
 Real-time chat via WebSocket.
 
+This is optional for the demo. The REST endpoint `POST /api/chat` is the canonical integration path; WS is just for a more “live” chat feel.
+
 **Send:**
 ```json
 {

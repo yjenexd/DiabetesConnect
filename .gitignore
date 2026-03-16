@@ -12,3 +12,17 @@ venv/
 
 # Node
 node_modules/
+
+venv/
+.venv/
+*.egg-info
+__pycache__/
+.pytest_cache/
+*.pyc
+
+*.db
+*.sqlite
+*.sqlite3
+
+.vscode/
+.idea/

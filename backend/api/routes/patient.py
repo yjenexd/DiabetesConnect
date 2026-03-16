@@ -1,5 +1,5 @@
 """Patient dashboard and manual logging endpoints."""
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
@@ -19,7 +19,7 @@ async def get_patient_dashboard(patient_id: str):
     """Get full patient dashboard data."""
     patient = await fetch_one("SELECT * FROM patients WHERE id = ?", (patient_id,))
     if not patient:
-        return {"error": "Patient not found"}
+        raise HTTPException(status_code=404, detail="Patient not found")
 
     doctor = None
     if patient.get("doctor_id"):
@@ -84,6 +84,9 @@ class MealLog(BaseModel):
 
 @router.post("/patients/{patient_id}/meals")
 async def log_meal_manual(patient_id: str, meal: MealLog):
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
     meal_id = uid()
     await execute(
         "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, meal_time, meal_type, logged_via) VALUES (?,?,?,?,?,?,?,?)",
@@ -99,6 +102,9 @@ class GlucoseLog(BaseModel):
 
 @router.post("/patients/{patient_id}/glucose")
 async def log_glucose_manual(patient_id: str, reading: GlucoseLog):
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
     reading_id = uid()
     await execute(
         "INSERT INTO glucose_readings (id, patient_id, value_mmol, measurement_time, context, logged_via) VALUES (?,?,?,?,?,?)",
@@ -114,6 +120,9 @@ class MedLog(BaseModel):
 
 @router.post("/patients/{patient_id}/medications/log")
 async def log_medication_manual(patient_id: str, log: MedLog):
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
     log_id = uid()
     await execute(
         "INSERT INTO med_logs (id, patient_id, medication_name, action, actual_time, logged_via) VALUES (?,?,?,?,?,?)",
@@ -129,6 +138,12 @@ class HistoryResponse(BaseModel):
 
 @router.post("/patients/{patient_id}/history-response")
 async def respond_to_history_request(patient_id: str, resp: HistoryResponse):
+    req_row = await fetch_one(
+        "SELECT id FROM history_requests WHERE id = ? AND patient_id = ?",
+        (resp.request_id, patient_id),
+    )
+    if not req_row:
+        raise HTTPException(status_code=404, detail="History request not found")
     await execute(
         "UPDATE history_requests SET patient_response = ?, status = 'responded', responded_at = ? WHERE id = ? AND patient_id = ?",
         (resp.response_text, datetime.now().isoformat(), resp.request_id, patient_id)
@@ -138,9 +153,11 @@ async def respond_to_history_request(patient_id: str, resp: HistoryResponse):
 
 @router.get("/patients/{patient_id}/referrals")
 async def get_referrals(patient_id: str):
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
     refs = await fetch_all(
         "SELECT id, referral_type, description, appointment_date, status FROM referrals WHERE patient_id = ?",
         (patient_id,)
     )
     return {"referrals": refs}
-
