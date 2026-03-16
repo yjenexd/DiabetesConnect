@@ -6,8 +6,20 @@
 # `npm i` installs these, and it can be very large. 
 node_modules/
 
-# Python Cache
+# Python
+venv/
+.venv/
+*.egg-info/
 __pycache__/
+.pytest_cache/
 *.pyc
-*.pyo
-*.pyd
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+__pycache__/
