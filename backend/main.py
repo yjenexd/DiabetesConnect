@@ -8,6 +8,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.middleware import DBConnectionMiddleware
 from api.routes import patient, doctor, chat
 from database.db import init_db
 from database.seed_data import seed_all
@@ -29,6 +30,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Request-scoped DB connection (1 connection per request)
+app.add_middleware(DBConnectionMiddleware)
 
 # CORS middleware
 origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")

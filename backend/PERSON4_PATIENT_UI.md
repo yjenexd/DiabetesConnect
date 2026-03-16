@@ -53,7 +53,7 @@ Functions:
 - respondToHistoryRequest(patientId, {request_id, response_text}) → POST /api/patients/{id}/history-response
 
 Also export a WebSocket connector function for real-time chat:
-- connectChatWebSocket(patientId) → returns WebSocket instance connected to /ws/chat/{patientId}
+- connectChatWebSocket(patientId) → returns WebSocket instance connected to /api/ws/chat/{patientId}
 
 All functions should handle errors gracefully and return {data, error} format.
 ```
