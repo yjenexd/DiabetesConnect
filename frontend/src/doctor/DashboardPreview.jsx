@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Eye } from 'lucide-react'
-import { getPatientView } from '../shared/api'
+import { getDoctorPatientPreview } from '../shared/api'
 import GlucoseChart from '../shared/GlucoseChart'
 import MedAdherenceGrid from '../shared/MedAdherenceGrid'
 
@@ -10,11 +10,14 @@ export default function DashboardPreview({ patientId, pendingRecommendation, pen
 
   useEffect(() => {
     (async () => {
-      const { data: d } = await getPatientView(patientId)
+      const { data: d } = await getDoctorPatientPreview(patientId)
       if (d) setData(d)
       setLoading(false)
     })()
   }, [patientId])
+
+  const visibleRecs = data?.recommendations?.filter(r => r.status === 'sent' || r.status === 'acknowledged') || []
+  const hiddenRecs = data?.recommendations?.filter(r => r.status !== 'sent' && r.status !== 'acknowledged') || []
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
@@ -49,11 +52,23 @@ export default function DashboardPreview({ patientId, pendingRecommendation, pen
             )}
 
             {/* Existing recommendations */}
-            {data.recommendations?.length > 0 && (
+            {visibleRecs.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border p-4">
-                <h3 className="font-bold text-gray-800 mb-2 text-sm">Doctor&apos;s Notes</h3>
-                {data.recommendations.map((r, i) => (
+                <h3 className="font-bold text-gray-800 mb-2 text-sm">Doctor&apos;s Notes (Patient sees)</h3>
+                {visibleRecs.map((r, i) => (
                   <p key={i} className="text-sm text-gray-600 mb-1">{r.content}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Hidden recommendations (draft/preview) */}
+            {hiddenRecs.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-4">
+                <h3 className="font-bold text-amber-800 mb-2 text-sm">Notes (Hidden from patient)</h3>
+                {hiddenRecs.map((r, i) => (
+                  <p key={i} className="text-sm text-gray-700 mb-1">
+                    <span className="font-medium text-amber-700">{(r.status || 'draft').toUpperCase()}:</span> {r.content}
+                  </p>
                 ))}
               </div>
             )}
