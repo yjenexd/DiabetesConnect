@@ -138,6 +138,15 @@ export async function getPatientView(patientId) {
   }
 }
 
+export async function getDoctorPatientPreview(patientId) {
+  try {
+    const { data } = await api.get(`/api/doctor/patients/${patientId}/patient-preview`)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not load patient preview') }
+  }
+}
+
 export async function generateReport(patientId) {
   try {
     const { data } = await api.post(`/api/doctor/patients/${patientId}/generate-report`)

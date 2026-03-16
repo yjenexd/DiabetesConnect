@@ -48,6 +48,9 @@ Send a patient message through the AI chat pipeline (SEA-LION → Claude → too
 
 Fetch the full patient dashboard — everything the patient sees.
 
+Notes:
+- `recommendations[]` only includes recommendations with status `sent` or `acknowledged` (draft/preview notes are hidden from the real patient dashboard).
+
 **URL Parameters:**
 | Param | Example |
 |-------|---------|
@@ -410,6 +413,15 @@ Full patient detail for the doctor view (all tables).
 ### GET `/api/doctor/patients/{id}/patient-view`
 
 Returns exactly what the patient sees (same response as `GET /api/patients/{id}/dashboard`). Used for doctor preview.
+
+---
+
+### GET `/api/doctor/patients/{id}/patient-preview`
+
+Returns a doctor-facing preview payload for a patient dashboard.
+
+Notes:
+- Shape matches the patient dashboard response, but `recommendations[]` may include `draft` / `preview` items that are hidden from the real patient dashboard.
 
 ---
 

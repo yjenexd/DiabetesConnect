@@ -18,7 +18,9 @@ from database.seed_data import seed_all
 async def lifespan(app: FastAPI):
     """Initialise database and seed on startup."""
     await init_db()
-    seed_on_startup = os.getenv("SEED_ON_STARTUP", "true").strip().lower() == "true"
+    app_env = os.getenv("APP_ENV", "development").strip().lower()
+    seed_default = "true" if app_env in {"dev", "development", "local"} else "false"
+    seed_on_startup = os.getenv("SEED_ON_STARTUP", seed_default).strip().lower() == "true"
     if seed_on_startup:
         await seed_all(init_db_already_ran=True)
     yield
