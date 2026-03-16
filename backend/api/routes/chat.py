@@ -5,6 +5,7 @@ from typing import Optional
 
 from agents.graph_patient import run_patient_chat
 from database.db import fetch_all
+from services.sealion_service import understand_input
 
 router = APIRouter()
 
@@ -75,4 +76,17 @@ async def websocket_chat(websocket: WebSocket, patient_id: str):
             })
     except WebSocketDisconnect:
         pass
+
+
+@router.get("/test/understand-input")
+async def test_understand_input(text: str):
+    """Test endpoint to debug language/intent detection."""
+    result = await understand_input(text)
+    return {
+        "input": text,
+        "detected_language": result.get("detected_language"),
+        "intent": result.get("intent"),
+        "entities": result.get("entities"),
+        "english_text": result.get("english_text"),
+    }
 
