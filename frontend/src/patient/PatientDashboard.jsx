@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { MessageCircle, TrendingUp, Pill, Utensils, AlertTriangle } from 'lucide-react'
-import { getPatientDashboard } from '../shared/api'
+import { MessageCircle, TrendingUp, Pill, Utensils, AlertTriangle, CalendarClock, SendHorizontal, X } from 'lucide-react'
+import { getPatientDashboard, respondToHistoryRequest } from '../shared/api'
 import GlucoseChart from '../shared/GlucoseChart'
 import MedAdherenceGrid from '../shared/MedAdherenceGrid'
 import GoalsSection from './GoalsSection'
@@ -14,6 +14,9 @@ export default function PatientDashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modalMode, setModalMode] = useState(null) // 'meal' | 'glucose' | 'medication' | null
+  const [activeHistoryRequest, setActiveHistoryRequest] = useState(null)
+  const [historyResponse, setHistoryResponse] = useState('')
+  const [submittingHistory, setSubmittingHistory] = useState(false)
 
   useEffect(() => { loadData() }, [id])
 
@@ -22,6 +25,15 @@ export default function PatientDashboard() {
     const { data: d } = await getPatientDashboard(id)
     setData(d)
     setLoading(false)
+  }
+
+  function getReferenceDate(items, keys) {
+    const timestamps = (items || [])
+      .map(item => keys.map(key => item?.[key]).find(Boolean))
+      .filter(Boolean)
+      .sort()
+
+    return timestamps.at(-1)?.slice(0, 10) || new Date().toISOString().slice(0, 10)
   }
 
   if (loading) return (
@@ -37,11 +49,44 @@ export default function PatientDashboard() {
   )
 
   const patient = data.patient
+  const doctor = data.doctor
   const latestGlucose = data.glucose_readings?.[0]
-  const todayMeals = data.meals?.filter(m => m.meal_time?.startsWith(new Date().toISOString().slice(0, 10))).length || 0
-  const todayMedsTaken = data.med_logs?.filter(m => m.action === 'taken' && m.actual_time?.startsWith(new Date().toISOString().slice(0, 10))).length || 0
-  const todayMedsTotal = data.med_logs?.filter(m => (m.scheduled_time || m.actual_time)?.startsWith(new Date().toISOString().slice(0, 10))).length || 0
+  const summaryDate = getReferenceDate(
+    [...(data.meals || []), ...(data.med_logs || []), ...(data.glucose_readings || [])],
+    ['meal_time', 'actual_time', 'scheduled_time', 'measurement_time'],
+  )
+  const todayMeals = data.meals?.filter(m => m.meal_time?.startsWith(summaryDate)).length || 0
+  const todaysMedLogs = data.med_logs?.filter(m => (m.scheduled_time || m.actual_time)?.startsWith(summaryDate)) || []
+  const todayMedsTaken = todaysMedLogs.filter(m => m.action === 'taken').length
+  const todayMedsMissed = todaysMedLogs.filter(m => m.action === 'skipped').length
   const latestRec = data.recommendations?.find(r => r.status === 'sent')
+  const pendingHistoryRequests = data.history_requests?.filter(h => h.status === 'pending') || []
+  const pendingReferrals = data.referrals?.filter(r => r.status === 'pending' || r.status === 'scheduled') || []
+  const summaryDateLabel = new Date(`${summaryDate}T00:00:00`).toLocaleDateString('en-SG', {
+    day: 'numeric',
+    month: 'short',
+  })
+
+  async function handleHistorySubmit(event) {
+    event.preventDefault()
+    if (!activeHistoryRequest || !historyResponse.trim()) return
+
+    setSubmittingHistory(true)
+    const { error } = await respondToHistoryRequest(id, {
+      request_id: activeHistoryRequest.id,
+      response_text: historyResponse.trim(),
+    })
+    setSubmittingHistory(false)
+
+    if (error) {
+      alert(error)
+      return
+    }
+
+    setHistoryResponse('')
+    setActiveHistoryRequest(null)
+    loadData()
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -55,6 +100,7 @@ export default function PatientDashboard() {
         {/* Today's Summary */}
         <div className="bg-white rounded-xl shadow-sm p-4">
           <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3">Today's Summary</h2>
+          <p className="mb-3 text-xs text-gray-400">Showing latest logged day: {summaryDateLabel}</p>
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center">
               <div className={`text-2xl font-bold ${latestGlucose?.value_mmol > 10 ? 'text-red-600' : latestGlucose?.value_mmol > 7 ? 'text-yellow-600' : 'text-green-600'}`}>
@@ -63,10 +109,10 @@ export default function PatientDashboard() {
               <div className="text-xs text-gray-500 mt-1">Latest Glucose<br />(mmol/L)</div>
             </div>
             <div className="text-center">
-              <div className={`text-2xl font-bold ${todayMedsTaken === todayMedsTotal && todayMedsTotal > 0 ? 'text-green-600' : 'text-yellow-600'}`}>
-                {todayMedsTaken}/{todayMedsTotal || '—'}
+              <div className={`text-2xl font-bold ${todayMedsMissed > 0 ? 'text-red-600' : todayMedsTaken > 0 ? 'text-green-600' : 'text-yellow-600'}`}>
+                {todayMedsTaken}/{todayMedsMissed}
               </div>
-              <div className="text-xs text-gray-500 mt-1">Meds Taken<br />Today</div>
+              <div className="text-xs text-gray-500 mt-1">Taken / Missed<br />Today</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-primary-600">{todayMeals}</div>
@@ -82,14 +128,16 @@ export default function PatientDashboard() {
               <AlertTriangle className="w-4 h-4" /> Doctor's Notes
             </h2>
             <p className="text-sm text-blue-900 mt-2 leading-relaxed">{latestRec.content}</p>
-            <p className="text-xs text-blue-500 mt-2">{new Date(latestRec.created_at).toLocaleDateString()}</p>
+            <p className="text-xs text-blue-500 mt-2">
+              {doctor?.name || patient.doctor_id || 'Care team'} · {new Date(latestRec.created_at).toLocaleDateString()}
+            </p>
           </div>
         )}
 
         {/* Glucose Chart */}
         <div className="bg-white rounded-xl shadow-sm p-4">
           <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
-            <TrendingUp className="w-4 h-4" /> Glucose Trend (14 days)
+            <TrendingUp className="w-4 h-4" /> Glucose Trend (7 days)
           </h2>
           <GlucoseChart readings={data.glucose_readings} height={200} />
         </div>
@@ -108,26 +156,28 @@ export default function PatientDashboard() {
         )}
 
         {/* Upcoming Actions */}
-        {(data.referrals?.length > 0 || data.history_requests?.filter(h => h.status === 'pending').length > 0) && (
+        {(pendingReferrals.length > 0 || pendingHistoryRequests.length > 0) && (
           <div className="bg-white rounded-xl shadow-sm p-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3">Upcoming Actions</h2>
-            {data.referrals?.map(r => (
+            <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold uppercase text-gray-500">
+              <CalendarClock className="h-4 w-4" /> Upcoming Actions
+            </h2>
+            {pendingReferrals.map(r => (
               <div key={r.id} className="flex items-center justify-between py-2 border-b last:border-0">
                 <div>
                   <p className="text-sm font-medium">{r.referral_type}</p>
                   <p className="text-xs text-gray-500">{r.description}</p>
                 </div>
-                <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
-                  {r.appointment_date || r.status}
+                <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                  {r.appointment_date ? new Date(r.appointment_date).toLocaleDateString() : r.status}
                 </span>
               </div>
             ))}
-            {data.history_requests?.filter(h => h.status === 'pending').map(h => (
+            {pendingHistoryRequests.map(h => (
               <div key={h.id} className="py-2 border-b last:border-0">
                 <p className="text-sm font-medium">Doctor's Request</p>
                 <p className="text-xs text-gray-500 mb-2">{h.request_text}</p>
                 <button className="text-xs bg-primary-100 text-primary-700 px-3 py-1 rounded-full font-medium"
-                  onClick={() => { /* Could open a modal */ }}>
+                  onClick={() => setActiveHistoryRequest(h)}>
                   Respond
                 </button>
               </div>
@@ -156,6 +206,40 @@ export default function PatientDashboard() {
           onClose={() => setModalMode(null)}
           onSuccess={() => { setModalMode(null); loadData() }}
         />
+      )}
+
+      {activeHistoryRequest && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Respond to Doctor</h3>
+                <p className="mt-1 text-sm text-gray-500">Share the requested history in your own words.</p>
+              </div>
+              <button onClick={() => setActiveHistoryRequest(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">{activeHistoryRequest.request_text}</p>
+            <form onSubmit={handleHistorySubmit} className="mt-4 space-y-4">
+              <textarea
+                value={historyResponse}
+                onChange={(event) => setHistoryResponse(event.target.value)}
+                className="h-32 w-full resize-none rounded-xl border px-4 py-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-primary-400"
+                placeholder="Type your response here"
+                required
+              />
+              <button
+                type="submit"
+                disabled={submittingHistory || !historyResponse.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 font-semibold text-white transition hover:bg-primary-700 disabled:opacity-50"
+              >
+                <SendHorizontal className="h-5 w-5" />
+                {submittingHistory ? 'Sending...' : 'Send Response'}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )
