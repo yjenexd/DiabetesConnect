@@ -5,3 +5,9 @@
 
 # `npm i` installs these, and it can be very large. 
 node_modules/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

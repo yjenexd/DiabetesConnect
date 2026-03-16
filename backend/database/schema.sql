@@ -193,3 +193,8 @@ CREATE INDEX IF NOT EXISTS idx_med_logs_patient ON med_logs(patient_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_patient ON alerts(patient_id);
 CREATE INDEX IF NOT EXISTS idx_chat_patient ON chat_messages(patient_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_patient ON recommendations(patient_id);
+
+-- High-impact indexes for list endpoints and ordering
+CREATE INDEX IF NOT EXISTS idx_patients_doctor ON patients(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_glucose_patient_time ON glucose_readings(patient_id, measurement_time);
+CREATE INDEX IF NOT EXISTS idx_alerts_patient_created_at ON alerts(patient_id, created_at);
