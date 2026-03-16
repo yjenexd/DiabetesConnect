@@ -44,8 +44,7 @@ export default function DoctorDashboard() {
             className="w-full border rounded-lg px-3 py-1.5 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-primary-400"
           >
             <option value="urgency">Sort: Urgency</option>
-            <option value="name">Sort: Alphabetical</option>
-            <option value="gender">Sort: Gender</option>
+            <option value="alphabetical">Sort: Alphabetical</option>
           </select>
 
           {/* Filter */}
