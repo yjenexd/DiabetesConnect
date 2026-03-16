@@ -13,10 +13,12 @@ router = APIRouter()
 def uid():
     return str(uuid4())[:8]
 
+async def fetch_patient_dashboard(patient_id: str, *, include_hidden_recommendations: bool = False):
+    """Fetch dashboard payload.
 
-@router.get("/patients/{patient_id}/dashboard")
-async def get_patient_dashboard(patient_id: str):
-    """Get full patient dashboard data."""
+    Patient view should not include hidden recommendations (draft/preview).
+    Doctor preview may request them via `include_hidden_recommendations=True`.
+    """
     patient = await fetch_one("SELECT * FROM patients WHERE id = ?", (patient_id,))
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -44,10 +46,18 @@ async def get_patient_dashboard(patient_id: str):
         "SELECT id, name, dosage, frequency, active FROM medications WHERE patient_id = ? AND active = 1",
         (patient_id,)
     )
-    recommendations = await fetch_all(
-        "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? ORDER BY created_at DESC LIMIT 5",
-        (patient_id,)
-    )
+
+    if include_hidden_recommendations:
+        recommendations = await fetch_all(
+            "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? ORDER BY created_at DESC LIMIT 10",
+            (patient_id,)
+        )
+    else:
+        recommendations = await fetch_all(
+            "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? AND status IN ('sent','acknowledged') ORDER BY created_at DESC LIMIT 5",
+            (patient_id,)
+        )
+
     goals = await fetch_all(
         "SELECT id, goal_type, target_value, target_unit, description, compliance_rate FROM lifestyle_goals WHERE patient_id = ? AND active = 1",
         (patient_id,)
@@ -73,6 +83,12 @@ async def get_patient_dashboard(patient_id: str):
         "referrals": referrals,
         "history_requests": history_requests,
     }
+
+
+@router.get("/patients/{patient_id}/dashboard")
+async def get_patient_dashboard(patient_id: str):
+    """Get full patient dashboard data."""
+    return await fetch_patient_dashboard(patient_id, include_hidden_recommendations=False)
 
 
 class MealLog(BaseModel):

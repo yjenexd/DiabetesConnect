@@ -142,8 +142,15 @@ async def get_patient_detail(patient_id: str):
 @router.get("/doctor/patients/{patient_id}/patient-view")
 async def get_patient_view(patient_id: str):
     """Get what the patient sees (for doctor preview)."""
-    from api.routes.patient import get_patient_dashboard
-    return await get_patient_dashboard(patient_id)
+    from api.routes.patient import fetch_patient_dashboard
+    return await fetch_patient_dashboard(patient_id, include_hidden_recommendations=False)
+
+
+@router.get("/doctor/patients/{patient_id}/patient-preview")
+async def get_patient_preview(patient_id: str):
+    """Doctor-only preview payload (may include items hidden from the real patient dashboard)."""
+    from api.routes.patient import fetch_patient_dashboard
+    return await fetch_patient_dashboard(patient_id, include_hidden_recommendations=True)
 
 
 @router.post("/doctor/patients/{patient_id}/generate-report")
