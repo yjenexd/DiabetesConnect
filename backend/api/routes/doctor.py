@@ -1,10 +1,10 @@
 """Doctor dashboard, analysis, and action endpoints."""
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database.db import fetch_all, fetch_one, execute
 from agents.graph_doctor import run_doctor_analysis
@@ -91,7 +91,7 @@ async def get_patient_detail(patient_id: str):
     """Get full patient detail for the doctor view."""
     patient = await fetch_one("SELECT * FROM patients WHERE id = ?", (patient_id,))
     if not patient:
-        return {"error": "Patient not found"}
+        raise HTTPException(status_code=404, detail="Patient not found")
 
     glucose = await fetch_all(
         "SELECT * FROM glucose_readings WHERE patient_id = ? ORDER BY measurement_time DESC LIMIT 30", (patient_id,)
@@ -156,12 +156,29 @@ async def generate_report(patient_id: str, doctor_id: str = "dr_tan_001"):
     }
     result = await run_doctor_analysis(state)
 
+    # Best-effort week boundaries from the most recent glucose reading (7-day window).
+    latest_row = await fetch_one(
+        "SELECT measurement_time FROM glucose_readings WHERE patient_id = ? ORDER BY measurement_time DESC LIMIT 1",
+        (patient_id,),
+    )
+    week_start = None
+    week_end = None
+    if latest_row and latest_row.get("measurement_time"):
+        ts = str(latest_row["measurement_time"])
+        try:
+            end_dt = datetime.fromisoformat(ts.replace(" ", "T"))
+            week_end = end_dt.date().isoformat()
+            week_start = (end_dt.date() - timedelta(days=6)).isoformat()
+        except Exception:
+            week_start = None
+            week_end = None
+
     # Save the report
     report_id = uid()
     analysis = result.get("analysis", {})
     await execute(
-        "INSERT INTO weekly_reports (id, patient_id, summary_text, key_metrics, risk_level, recommendations, generated_at) VALUES (?,?,?,?,?,?,?)",
-        (report_id, patient_id, analysis.get("summary", ""),
+        "INSERT INTO weekly_reports (id, patient_id, week_start, week_end, summary_text, key_metrics, risk_level, recommendations, generated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (report_id, patient_id, week_start, week_end, analysis.get("summary", ""),
          json.dumps(analysis.get("key_findings", []), default=str),
          analysis.get("risk_level", "unknown"),
          json.dumps(analysis.get("recommendations", []), default=str),
@@ -184,6 +201,13 @@ class ActionRequest(BaseModel):
 @router.post("/doctor/patients/{patient_id}/actions")
 async def create_doctor_action(patient_id: str, req: ActionRequest, doctor_id: str = "dr_tan_001"):
     """Apply a doctor action (prescribe, lifestyle, request history, referral)."""
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    if req.action_type not in {"prescribe_medication", "lifestyle_change", "request_history", "referral"}:
+        raise HTTPException(status_code=400, detail="Invalid action_type")
+
     action_id = uid()
     await execute(
         "INSERT INTO doctor_actions (id, patient_id, doctor_id, action_type, action_data, status, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -234,6 +258,9 @@ class RecommendationRequest(BaseModel):
 
 @router.post("/doctor/patients/{patient_id}/recommendation")
 async def draft_recommendation(patient_id: str, req: RecommendationRequest, doctor_id: str = "dr_tan_001"):
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
     rec_id = uid()
     await execute(
         "INSERT INTO recommendations (id, patient_id, doctor_id, recommendation_type, content, ai_generated_draft, status, created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -247,19 +274,31 @@ class ApproveRequest(BaseModel):
 
 
 @router.put("/doctor/patients/{patient_id}/recommendation/{rec_id}/approve")
-async def approve_recommendation(patient_id: str, rec_id: str, req: ApproveRequest = None):
+async def approve_recommendation(patient_id: str, rec_id: str, req: Optional[ApproveRequest] = None):
+    rec = await fetch_one(
+        "SELECT id FROM recommendations WHERE id = ? AND patient_id = ?",
+        (rec_id, patient_id),
+    )
+    if not rec:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+
     if req and req.content:
         await execute(
-            "UPDATE recommendations SET content = ?, status = 'sent' WHERE id = ?",
-            (req.content, rec_id)
+            "UPDATE recommendations SET content = ?, status = 'sent' WHERE id = ? AND patient_id = ?",
+            (req.content, rec_id, patient_id),
         )
     else:
-        await execute("UPDATE recommendations SET status = 'sent' WHERE id = ?", (rec_id,))
+        await execute(
+            "UPDATE recommendations SET status = 'sent' WHERE id = ? AND patient_id = ?",
+            (rec_id, patient_id),
+        )
     return {"success": True}
 
 
 @router.put("/alerts/{alert_id}/acknowledge")
 async def acknowledge_alert(alert_id: str):
+    alert = await fetch_one("SELECT id FROM alerts WHERE id = ?", (alert_id,))
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
     await execute("UPDATE alerts SET acknowledged_by_doctor = 1 WHERE id = ?", (alert_id,))
     return {"success": True}
-
