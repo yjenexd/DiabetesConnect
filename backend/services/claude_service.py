@@ -1,5 +1,6 @@
 """Claude API service for DiabetesConnect — reasoning, tool use, vision, and clinical analysis."""
 import os
+import re
 import json
 import logging
 from anthropic import AsyncAnthropic
@@ -20,16 +21,22 @@ MODEL = "claude-sonnet-4-20250514"
 
 
 def _strip_code_fences(text: str) -> str:
-    """Strip markdown code fences from Claude's response."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
-    if cleaned.startswith("json"):
-        cleaned = cleaned[4:].strip()
-    return cleaned
+    """Strip markdown code fences from Claude's response.
+
+    Handles preamble text before the code block, multiple code blocks,
+    and other edge cases that the old simple startswith check missed.
+    """
+    # Try to extract content from a fenced code block (handles preamble)
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+    # Fallback: try to find raw JSON object/array in the text
+    brace = text.find("{")
+    bracket = text.find("[")
+    if brace == -1 and bracket == -1:
+        return text.strip()
+    start = min(i for i in (brace, bracket) if i >= 0)
+    return text[start:].strip()
 
 
 async def chat_with_tools(system_prompt: str, messages: list, tools: list = None) -> dict:
@@ -81,7 +88,7 @@ async def generate_clinical_analysis(patient_data: str, system_prompt: str) -> d
             model=MODEL,
             max_tokens=2048,
             system=system_prompt,
-            messages=[{"role": "user", "content": f"Analyse this patient data and return JSON:\n\n{patient_data}"}],
+            messages=[{"role": "user", "content": f"Analyse this patient data. Return ONLY the raw JSON object — no markdown, no code fences, no explanation before or after.\n\n{patient_data}"}],
         )
         raw = response.content[0].text
         cleaned = _strip_code_fences(raw)
