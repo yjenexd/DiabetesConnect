@@ -36,6 +36,7 @@ async def send_chat_message(req: ChatRequest):
         "language": result.get("detected_language", "english"),
         "tools_called": [t["tool"] for t in result.get("tool_results", [])],
         "alerts_generated": result.get("agent3_alerts", []),
+        "transcribed_text": result.get("transcribed_text", ""),
     }
 
 

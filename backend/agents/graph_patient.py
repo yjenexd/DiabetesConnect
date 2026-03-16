@@ -3,7 +3,7 @@ import json
 from uuid import uuid4
 
 from agents.state import PatientChatState
-from agents.prompts import AGENT1_SYSTEM_PROMPT, AGENT3_SYSTEM_PROMPT, TOOL_DEFINITIONS
+from agents.prompts import get_agent1_prompt, AGENT3_SYSTEM_PROMPT, TOOL_DEFINITIONS
 from agents.tools import execute_tool
 from services.claude_service import chat_with_tools, check_anomalies
 from services.sealion_service import understand_input, localise_response
@@ -51,12 +51,14 @@ async def run_patient_chat(state: PatientChatState) -> PatientChatState:
     state["claude_messages"] = messages
 
     # ── Step 4: Agent 1 — Reasoning with tools (may loop) ──
+    # Get language-aware system prompt so Claude responds in the patient's language
+    agent1_prompt = get_agent1_prompt(state.get("detected_language", "english"))
     all_tool_results = []
     max_rounds = 5
     current_messages = list(messages)
 
     for _ in range(max_rounds):
-        result = await chat_with_tools(AGENT1_SYSTEM_PROMPT, current_messages, TOOL_DEFINITIONS)
+        result = await chat_with_tools(agent1_prompt, current_messages, TOOL_DEFINITIONS)
         
         if not result["tool_calls"]:
             # No more tools — we have the final response

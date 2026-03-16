@@ -61,10 +61,12 @@ export default function ChatInterface() {
       imageBase64,
     }
 
+    const isVoice = inputType === 'voice' && audioBase64
     const userMsg = {
       role: 'user',
-      content: trimmedText || (audioBase64 ? 'Voice message' : 'Meal photo'),
+      content: trimmedText || (isVoice ? '🎙️ Recording…' : 'Meal photo'),
       timestamp: new Date().toISOString(),
+      isVoice,
     }
 
     setRequestError('')
@@ -77,11 +79,40 @@ export default function ChatInterface() {
     setLoading(false)
 
     if (data?.response) {
-      setMessages(prev => [...prev, buildAssistantMessage(data, '')])
+      // If voice input, update the user bubble with the transcribed text
+      if (isVoice && data.transcribed_text) {
+        setMessages(prev => {
+          const updated = [...prev]
+          // Find the last user voice message and update its content
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'user' && updated[i].isVoice) {
+              updated[i] = { ...updated[i], content: `🎙️ "${data.transcribed_text}"` }
+              break
+            }
+          }
+          return [...updated, buildAssistantMessage(data, '')]
+        })
+      } else {
+        setMessages(prev => [...prev, buildAssistantMessage(data, '')])
+      }
     } else {
       const fallbackMessage = error || 'Sorry, something went wrong. Please try again.'
       setRequestError('The message did not go through. You can retry it.')
-      setMessages(prev => [...prev, buildAssistantMessage(null, fallbackMessage)])
+      // If voice, update the bubble to show it failed
+      if (isVoice) {
+        setMessages(prev => {
+          const updated = [...prev]
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'user' && updated[i].isVoice) {
+              updated[i] = { ...updated[i], content: '🎙️ Voice message (failed to process)' }
+              break
+            }
+          }
+          return [...updated, buildAssistantMessage(null, fallbackMessage)]
+        })
+      } else {
+        setMessages(prev => [...prev, buildAssistantMessage(null, fallbackMessage)])
+      }
     }
   }
 
