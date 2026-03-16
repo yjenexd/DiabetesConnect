@@ -8,7 +8,7 @@ function getErrorMessage(error, fallbackMessage = 'Request failed') {
 
 export function connectChatWebSocket(patientId) {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-  return new WebSocket(`${protocol}://${window.location.host}/ws/chat/${patientId}`)
+  return new WebSocket(`${protocol}://${window.location.host}/api/ws/chat/${patientId}`)
 }
 
 // ── Patient APIs ──
@@ -51,7 +51,7 @@ export async function logMealManual(patientId, meal) {
     const { data } = await api.post(`/api/patients/${patientId}/meals`, meal)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not log meal') }
   }
 }
 
@@ -60,7 +60,7 @@ export async function logGlucoseManual(patientId, reading) {
     const { data } = await api.post(`/api/patients/${patientId}/glucose`, reading)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not log glucose') }
   }
 }
 
@@ -69,7 +69,7 @@ export async function logMedicationManual(patientId, log) {
     const { data } = await api.post(`/api/patients/${patientId}/medications/log`, log)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not log medication') }
   }
 }
 
@@ -78,7 +78,7 @@ export async function respondToHistoryRequest(patientId, body) {
     const { data } = await api.post(`/api/patients/${patientId}/history-response`, body)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not submit response') }
   }
 }
 
@@ -89,7 +89,7 @@ export async function getDoctorPatients(doctorId, sortBy = 'urgency', filterSeve
     const { data } = await api.get(`/api/doctor/${doctorId}/patients`, { params: { sort_by: sortBy, filter_severity: filterSeverity } })
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not load patient list') }
   }
 }
 
@@ -98,7 +98,7 @@ export async function getPatientDetail(patientId) {
     const { data } = await api.get(`/api/doctor/patients/${patientId}/detail`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not load patient detail') }
   }
 }
 
@@ -107,7 +107,7 @@ export async function getPatientView(patientId) {
     const { data } = await api.get(`/api/doctor/patients/${patientId}/patient-view`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not load patient view') }
   }
 }
 
@@ -116,7 +116,7 @@ export async function generateReport(patientId) {
     const { data } = await api.post(`/api/doctor/patients/${patientId}/generate-report`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not generate report') }
   }
 }
 
@@ -125,7 +125,7 @@ export async function createDoctorAction(patientId, action) {
     const { data } = await api.post(`/api/doctor/patients/${patientId}/actions`, action)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not create action') }
   }
 }
 
@@ -134,7 +134,7 @@ export async function draftRecommendation(patientId, rec) {
     const { data } = await api.post(`/api/doctor/patients/${patientId}/recommendation`, rec)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not draft recommendation') }
   }
 }
 
@@ -144,7 +144,7 @@ export async function approveRecommendation(patientId, recId, content = null) {
     const { data } = await api.put(`/api/doctor/patients/${patientId}/recommendation/${recId}/approve`, body)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not approve recommendation') }
   }
 }
 
@@ -153,6 +153,6 @@ export async function acknowledgeAlert(alertId) {
     const { data } = await api.put(`/api/alerts/${alertId}/acknowledge`)
     return { data, error: null }
   } catch (e) {
-    return { data: null, error: e.message }
+    return { data: null, error: getErrorMessage(e, 'Could not acknowledge alert') }
   }
 }

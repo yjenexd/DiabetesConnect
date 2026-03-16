@@ -140,7 +140,7 @@ async def draft_patient_recommendation(analysis: str, actions: list, patient_nam
         return f"Dear {patient_name}, please continue following your care plan and reach out if you have any concerns. Your doctor is here to support you."
 
 
-async def analyse_meal_photo(image_base64: str) -> dict:
+async def analyse_meal_photo(image_base64: str, *, media_type: str = "image/jpeg") -> dict:
     """Analyse a meal photo using Claude Vision."""
     system_prompt = (
         "You are a nutritional analyst specialising in Singaporean and Southeast Asian cuisine. "
@@ -160,7 +160,7 @@ async def analyse_meal_photo(image_base64: str) -> dict:
                     "content": [
                         {
                             "type": "image",
-                            "source": {"type": "base64", "media_type": "image/jpeg", "data": image_base64},
+                            "source": {"type": "base64", "media_type": media_type, "data": image_base64},
                         },
                         {
                             "type": "text",
@@ -181,4 +181,3 @@ async def analyse_meal_photo(image_base64: str) -> dict:
     except Exception as e:
         logger.error("analyse_meal_photo failed: %s", e)
         return {"food_name": "Unknown", "calories": 0, "carbs_grams": 0, "protein_grams": 0, "fat_grams": 0, "cultural_context": "unknown"}
-
