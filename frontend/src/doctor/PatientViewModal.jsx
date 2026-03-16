@@ -42,7 +42,7 @@ export default function PatientViewModal({ patientId, onClose }) {
                 <div className="bg-white rounded-xl p-3 shadow-sm border text-center">
                   <p className="text-xs text-gray-500">Latest Glucose</p>
                   <p className="text-xl font-bold text-primary-600">
-                    {data.glucose_readings?.[data.glucose_readings.length - 1]?.value_mmol || '—'}
+                    {data.glucose_readings?.[0]?.value_mmol || '—'}
                   </p>
                   <p className="text-xs text-gray-400">mmol/L</p>
                 </div>
