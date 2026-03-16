@@ -6,13 +6,27 @@ export default function AIAnalysisPanel({ patientId, analysisData, onAnalysisGen
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  function parseAnalysis(raw) {
+    if (!raw) return null
+    if (typeof raw === 'object') return raw
+    // Try parsing string as JSON (handles backend fallback case)
+    try {
+      const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/)
+      const toParse = fenceMatch ? fenceMatch[1].trim() : raw.trim()
+      const parsed = JSON.parse(toParse)
+      return typeof parsed === 'object' ? parsed : { summary: raw }
+    } catch {
+      return { summary: raw }
+    }
+  }
+
   async function handleGenerate() {
     setLoading(true)
     setError(null)
     const { data, error: err } = await generateReport(patientId)
     setLoading(false)
     if (data?.analysis) {
-      onAnalysisGenerated(data.analysis)
+      onAnalysisGenerated(parseAnalysis(data.analysis))
     } else {
       setError(err || 'Failed to generate analysis')
     }
