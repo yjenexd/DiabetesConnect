@@ -2,6 +2,7 @@
 
 > **Single source of truth** for all frontend ↔ backend communication.
 > Base URL: `http://localhost:8000`
+> Frontend dev server: `http://localhost:5173` proxies `/api` and `/api/ws` to the backend, so the frontend should call relative URLs like `/api/patients/{id}/dashboard`.
 
 ---
 
@@ -656,3 +657,105 @@ Real-time chat via WebSocket.
 | ID | Name |
 |----|------|
 | `dr_tan_001` | Dr. Tan Wei Ming |
+
+---
+
+## Smoke Checklist (curl)
+
+Use this to sanity-check the contract end-to-end without guessing URLs, parameter names, or top-level response shapes.
+
+```bash
+BASE_URL="http://localhost:8000"
+PATIENT_ID="ah_kow_001"
+DOCTOR_ID="dr_tan_001"
+
+# 1) Health
+curl -s "$BASE_URL/health"
+# Expect top-level keys: status, app
+
+# 2) Patient dashboard
+curl -s "$BASE_URL/api/patients/$PATIENT_ID/dashboard"
+# Expect top-level keys:
+# - patient, glucose_readings, meals, med_logs, medications
+# - recommendations, lifestyle_goals, referrals, history_requests
+
+# 3) Patient manual logs
+curl -s -X POST "$BASE_URL/api/patients/$PATIENT_ID/meals" \
+  -H 'Content-Type: application/json' \
+  -d '{"food_name":"Char Kway Teow","calories_estimate":700,"carbs_grams":90,"meal_type":"lunch"}'
+# Expect top-level keys: success, meal_id
+
+curl -s -X POST "$BASE_URL/api/patients/$PATIENT_ID/glucose" \
+  -H 'Content-Type: application/json' \
+  -d '{"value_mmol":10.5,"context":"fasting"}'
+# Expect top-level keys: success, reading_id
+
+curl -s -X POST "$BASE_URL/api/patients/$PATIENT_ID/medications/log" \
+  -H 'Content-Type: application/json' \
+  -d '{"medication_name":"Metformin","action":"taken"}'
+# Expect top-level keys: success, log_id
+
+# 4) Patient referrals
+curl -s "$BASE_URL/api/patients/$PATIENT_ID/referrals"
+# Expect top-level keys: referrals
+
+# 5) Chat (text)
+curl -s -X POST "$BASE_URL/api/chat" \
+  -H 'Content-Type: application/json' \
+  -d "{\"patient_id\":\"$PATIENT_ID\",\"message\":\"I ate chicken rice\",\"input_type\":\"text\"}"
+# Expect top-level keys: response, english_response, language, tools_called, alerts_generated
+
+# 6) Chat history
+curl -s "$BASE_URL/api/chat/history/$PATIENT_ID?limit=50"
+# Expect top-level keys: patient_id, messages
+
+# 7) Doctor patient list (sort_by MUST be: urgency|alphabetical)
+curl -s "$BASE_URL/api/doctor/$DOCTOR_ID/patients?sort_by=urgency&filter_severity=all"
+# Expect top-level keys: patients, total_count
+
+# 8) Doctor patient detail
+curl -s "$BASE_URL/api/doctor/patients/$PATIENT_ID/detail"
+# Expect top-level keys:
+# - patient, glucose_readings, meals, med_logs, medications
+# - alerts, lifestyle_goals, referrals, history_requests
+# - recommendations, weekly_reports, doctor_actions
+
+# 9) Doctor patient-view (exactly the patient dashboard shape)
+curl -s "$BASE_URL/api/doctor/patients/$PATIENT_ID/patient-view"
+# Expect same top-level keys as GET /api/patients/{id}/dashboard
+
+# 10) Generate AI report (weekly report)
+curl -s -X POST "$BASE_URL/api/doctor/patients/$PATIENT_ID/generate-report?doctor_id=$DOCTOR_ID"
+# Expect top-level keys: report_id, analysis, recommendations, preview
+
+# 11) Doctor actions
+curl -s -X POST "$BASE_URL/api/doctor/patients/$PATIENT_ID/actions?doctor_id=$DOCTOR_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"action_type":"lifestyle_change","action_data":{"goal_type":"daily_carb_limit","target_value":200,"target_unit":"grams_per_day","description":"Keep daily carbs under 200g"}}'
+# Expect top-level keys: success, action_id
+
+# 12) Draft + approve recommendation
+curl -s -X POST "$BASE_URL/api/doctor/patients/$PATIENT_ID/recommendation?doctor_id=$DOCTOR_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"Uncle Ah Kow, keep taking your evening meds.","recommendation_type":"lifestyle"}'
+# Expect top-level keys: recommendation_id, preview
+
+# To approve, copy rec_id from the draft response:
+# curl -s -X PUT "$BASE_URL/api/doctor/patients/$PATIENT_ID/recommendation/<rec_id>/approve" -H 'Content-Type: application/json' -d '{}'
+# Expect top-level keys: success
+
+# 13) Acknowledge an alert
+# To get an alert id, read it from GET /api/doctor/patients/{id}/detail (alerts[0].id), then:
+# curl -s -X PUT "$BASE_URL/api/alerts/<alert_id>/acknowledge"
+# Expect top-level keys: success
+
+# 14) WebSocket (optional)
+# Backend WS URL:
+# - ws://localhost:8000/api/ws/chat/$PATIENT_ID
+# Frontend dev WS URL via proxy:
+# - ws://localhost:5173/api/ws/chat/$PATIENT_ID
+# Example (requires wscat):
+#   wscat -c "ws://localhost:8000/api/ws/chat/$PATIENT_ID"
+#   > {"message":"I took Metformin","input_type":"text"}
+# Expect receive keys: response, language, tools_called, alerts_generated
+```
