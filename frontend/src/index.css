@@ -18,12 +18,17 @@ body {
 
 /* Colored light backgrounds */
 .dark .bg-red-50      { background-color: #3b0a0a !important; }
+.dark .bg-red-100     { background-color: #7f1d1d !important; }
 .dark .bg-green-50    { background-color: #052e16 !important; }
+.dark .bg-green-100   { background-color: #14532d !important; }
 .dark .bg-blue-50     { background-color: #0c1a2e !important; }
+.dark .bg-blue-100    { background-color: #1e3a8a !important; }
 .dark .bg-yellow-50   { background-color: #3a1f00 !important; }
+.dark .bg-yellow-100  { background-color: #713f12 !important; }
 .dark .bg-amber-50    { background-color: #3a1f00 !important; }
 .dark .bg-amber-100   { background-color: #78350f !important; }
 .dark .bg-orange-50   { background-color: #431407 !important; }
+.dark .bg-orange-100  { background-color: #7c2d12 !important; }
 .dark .bg-rose-50     { background-color: #4c0519 !important; }
 .dark .bg-primary-50  { background-color: #172554 !important; }
 .dark .bg-primary-100 { background-color: #1e3a8a !important; }
