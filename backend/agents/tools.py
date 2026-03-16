@@ -71,6 +71,16 @@ async def get_active_referrals(patient_id: str, **_) -> dict:
     return {"referrals": refs}
 
 
+async def analyse_meal_photo(patient_id: str, description: str, meal_context: str = "hawker_food", **_) -> dict:
+    """Log a meal identified from a food photo (Claude Vision provides the description)."""
+    meal_id = uid()
+    await execute(
+        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?)",
+        (meal_id, patient_id, description, 0, 0.0, datetime.now().isoformat(), "meal", meal_context, "photo")
+    )
+    return {"success": True, "meal_id": meal_id, "description": description, "note": "Calories and carbs to be estimated by assistant"}
+
+
 # ── Dispatcher ──
 TOOL_MAP = {
     "log_meal": log_meal,
@@ -80,6 +90,7 @@ TOOL_MAP = {
     "get_medication_schedule": get_medication_schedule,
     "get_lifestyle_goals": get_lifestyle_goals,
     "get_active_referrals": get_active_referrals,
+    "analyse_meal_photo": analyse_meal_photo,
 }
 
 
