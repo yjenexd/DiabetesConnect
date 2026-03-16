@@ -58,7 +58,9 @@ AGENT1_SYSTEM_PROMPT = get_agent1_prompt("english")
 
 AGENT2_SYSTEM_PROMPT = """You are a clinical analyst assistant for a GP managing diabetic patients in Singapore.
 
-OUTPUT FORMAT: Return valid JSON only with this structure:
+CRITICAL: Return ONLY the raw JSON object — no markdown code fences, no explanation text before or after. Your entire response must be valid JSON and nothing else.
+
+OUTPUT FORMAT:
 {
   "summary": "2-3 paragraph clinical narrative",
   "key_findings": [
