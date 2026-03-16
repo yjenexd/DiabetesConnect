@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { MessageCircle, TrendingUp, Pill, Utensils, AlertTriangle, CalendarClock, SendHorizontal, X } from 'lucide-react'
+import { MessageCircle, TrendingUp, Pill, Utensils, AlertTriangle, CalendarClock, SendHorizontal, X, Sun, Moon } from 'lucide-react'
 import { getPatientDashboard, respondToHistoryRequest } from '../shared/api'
+import { useTheme } from '../shared/ThemeContext'
 import GlucoseChart from '../shared/GlucoseChart'
 import MedAdherenceGrid from '../shared/MedAdherenceGrid'
 import GoalsSection from './GoalsSection'
@@ -11,6 +12,7 @@ import ManualLogModal from './ManualLogModal'
 export default function PatientDashboard() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { dark, toggle } = useTheme()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modalMode, setModalMode] = useState(null) // 'meal' | 'glucose' | 'medication' | null
@@ -92,8 +94,15 @@ export default function PatientDashboard() {
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <div className="bg-primary-600 text-white px-4 py-5">
-        <h1 className="text-xl font-bold">Hello, {patient.name} 👋</h1>
-        <p className="text-primary-100 text-sm mt-1">Your health dashboard</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold">Hello, {patient.name} 👋</h1>
+            <p className="text-primary-100 text-sm mt-1">Your health dashboard</p>
+          </div>
+          <button onClick={toggle} className="text-primary-200 hover:text-white transition p-1">
+            {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       <div className="px-4 py-4 space-y-4 max-w-lg mx-auto">
