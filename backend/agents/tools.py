@@ -10,12 +10,30 @@ def uid():
 
 async def log_meal(patient_id: str, food_name: str, calories_estimate: int, carbs_grams: float,
                    meal_type: str, cultural_context: str = "hawker_food", **_) -> dict:
+    """Stage a meal for user confirmation instead of auto-logging."""
+    return {
+        "pending_confirmation": True,
+        "patient_id": patient_id,
+        "food_name": food_name,
+        "calories_estimate": calories_estimate,
+        "carbs_grams": carbs_grams,
+        "meal_type": meal_type,
+        "cultural_context": cultural_context,
+    }
+
+
+async def confirm_log_meal(patient_id: str, food_name: str, calories_estimate: int,
+                           carbs_grams: float, meal_type: str,
+                           cultural_context: str = "hawker_food", protein_grams: float = 0.0,
+                           fat_grams: float = 0.0, **_) -> dict:
+    """Actually insert the meal into the database after user confirmation."""
     meal_id = uid()
     await execute(
-        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?)",
-        (meal_id, patient_id, food_name, calories_estimate, carbs_grams, datetime.now().isoformat(), meal_type, cultural_context, "chatbot")
+        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (meal_id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams,
+         datetime.now().isoformat(), meal_type, cultural_context, "chatbot")
     )
-    return {"success": True, "meal_id": meal_id, "food_name": food_name, "carbs_grams": carbs_grams}
+    return {"success": True, "meal_id": meal_id, "food_name": food_name}
 
 
 async def log_medication(patient_id: str, medication_name: str, action: str, reason: str = None, **_) -> dict:

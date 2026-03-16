@@ -1,9 +1,59 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench } from 'lucide-react'
-import { sendChatMessage, getChatHistory } from '../shared/api'
+import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench, Check, X } from 'lucide-react'
+import { sendChatMessage, getChatHistory, confirmMealLog } from '../shared/api'
 import VoiceRecorder from './VoiceRecorder'
 import PhotoUpload from './PhotoUpload'
+
+function MealConfirmCard({ meal, patientId, onDone }) {
+  const [status, setStatus] = useState(null) // null | 'logging' | 'logged' | 'skipped'
+
+  async function handleLog() {
+    setStatus('logging')
+    await confirmMealLog(patientId, {
+      food_name: meal.food_name,
+      calories_estimate: meal.calories_estimate || 0,
+      carbs_grams: meal.carbs_grams || 0,
+      meal_type: meal.meal_type || 'meal',
+      cultural_context: meal.cultural_context || 'hawker_food',
+    })
+    setStatus('logged')
+    setTimeout(() => onDone(), 1500)
+  }
+
+  return (
+    <div className="flex justify-start mt-1">
+      <div className="max-w-[80%] rounded-2xl rounded-bl-md border bg-orange-50 px-4 py-3 shadow-sm">
+        <p className="text-[11px] font-semibold text-orange-600 uppercase mb-1">Meal detected</p>
+        <p className="text-sm font-medium text-gray-800">{meal.food_name}</p>
+        <p className="text-xs text-gray-500 mt-0.5">
+          {meal.calories_estimate > 0 && `~${meal.calories_estimate} kcal · `}{meal.carbs_grams > 0 && `${meal.carbs_grams}g carbs`}
+        </p>
+        {status === 'logged' ? (
+          <p className="mt-2 text-xs font-medium text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> Logged!</p>
+        ) : status === 'skipped' ? (
+          <p className="mt-2 text-xs text-gray-400">Skipped</p>
+        ) : (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={handleLog}
+              disabled={status === 'logging'}
+              className="flex items-center gap-1 rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+            >
+              <Check className="w-3 h-3" /> {status === 'logging' ? 'Logging…' : 'Log this meal'}
+            </button>
+            <button
+              onClick={() => { setStatus('skipped'); setTimeout(() => onDone(), 800) }}
+              className="flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              <X className="w-3 h-3" /> Skip
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function ChatInterface() {
   const { id } = useParams()
@@ -47,6 +97,7 @@ export default function ChatInterface() {
       timestamp: new Date().toISOString(),
       toolsCalled: data?.tools_called || [],
       alertsGenerated: data?.alerts_generated || [],
+      pendingMeals: data?.pending_meals || [],
     }
   }
 
@@ -180,7 +231,8 @@ export default function ChatInterface() {
           </div>
         )}
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div key={i}>
+          <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
               msg.role === 'user'
                 ? 'bg-primary-600 text-white rounded-br-md'
@@ -192,7 +244,7 @@ export default function ChatInterface() {
                   : <Bot className="w-3 h-3 text-primary-500" />
                 }
                 <span className="text-[10px] opacity-70">
-                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
                 </span>
               </div>
               <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -222,6 +274,24 @@ export default function ChatInterface() {
                 </div>
               )}
             </div>
+          </div>
+          {/* Meal confirmation cards */}
+
+          {msg.role === 'assistant' && msg.pendingMeals?.map((meal, mealIdx) => (
+            <MealConfirmCard
+              key={`${i}-meal-${mealIdx}`}
+              meal={meal}
+              patientId={id}
+              onDone={() => {
+                setMessages(prev => prev.map((m, mi) => {
+                  if (mi !== i) return m
+                  const updated = [...(m.pendingMeals || [])]
+                  updated.splice(mealIdx, 1)
+                  return { ...m, pendingMeals: updated }
+                }))
+              }}
+            />
+          ))}
           </div>
         ))}
         {loading && (

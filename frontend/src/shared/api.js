@@ -73,6 +73,33 @@ export async function logMedicationManual(patientId, log) {
   }
 }
 
+export async function confirmMealLog(patientId, mealData) {
+  try {
+    const { data } = await api.post(`/api/patients/${patientId}/meals/confirm`, mealData)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not log meal') }
+  }
+}
+
+export async function lookupMealNutrition(foodName) {
+  try {
+    const { data } = await api.get('/api/meals/lookup', { params: { food_name: foodName } })
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Nutrition lookup failed') }
+  }
+}
+
+export async function getMedSchedule(patientId) {
+  try {
+    const { data } = await api.get(`/api/patients/${patientId}/med-schedule`)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not load medication schedule') }
+  }
+}
+
 export async function respondToHistoryRequest(patientId, body) {
   try {
     const { data } = await api.post(`/api/patients/${patientId}/history-response`, body)

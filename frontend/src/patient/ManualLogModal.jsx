@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X, Utensils, Droplet, Pill } from 'lucide-react'
-import { logMealManual as logMeal, logGlucoseManual as logGlucose, logMedicationManual as logMedication } from '../shared/api'
+import { X, Utensils, Droplet, Pill, Sparkles } from 'lucide-react'
+import { logMealManual as logMeal, logGlucoseManual as logGlucose, logMedicationManual as logMedication, lookupMealNutrition } from '../shared/api'
 
 const TABS = {
   meal: { label: 'Log Meal', icon: Utensils, color: 'text-orange-500' },
@@ -12,7 +12,8 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
   const [tab, setTab] = useState(mode || 'meal')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [mealForm, setMealForm] = useState({ food_name: '', calories_estimate: '', carbs_grams: '', meal_type: 'lunch' })
+  const [mealForm, setMealForm] = useState({ food_name: '', calories_estimate: '', carbs_grams: '', protein_grams: '', fat_grams: '', meal_type: 'lunch' })
+  const [lookingUp, setLookingUp] = useState(false)
   const [glucoseForm, setGlucoseForm] = useState({ value_mmol: '', context: 'pre_meal' })
   const [medForm, setMedForm] = useState({ medication_name: medications[0]?.name || '', action: 'taken' })
 
@@ -25,6 +26,8 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
         food_name: mealForm.food_name,
         calories_estimate: mealForm.calories_estimate ? parseInt(mealForm.calories_estimate, 10) : null,
         carbs_grams: mealForm.carbs_grams ? parseFloat(mealForm.carbs_grams) : null,
+        protein_grams: mealForm.protein_grams ? parseFloat(mealForm.protein_grams) : null,
+        fat_grams: mealForm.fat_grams ? parseFloat(mealForm.fat_grams) : null,
         meal_type: mealForm.meal_type,
       })
     } else if (tab === 'glucose') {
@@ -82,13 +85,38 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Food name</label>
-                <input
-                  value={mealForm.food_name}
-                  onChange={e => setMealForm({ ...mealForm, food_name: e.target.value })}
-                  placeholder="e.g. chicken rice"
-                  className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
-                  required
-                />
+                <div className="flex gap-2">
+                  <input
+                    value={mealForm.food_name}
+                    onChange={e => setMealForm({ ...mealForm, food_name: e.target.value })}
+                    placeholder="e.g. chicken rice"
+                    className="flex-1 border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                    required
+                  />
+                  <button
+                    type="button"
+                    disabled={!mealForm.food_name.trim() || lookingUp}
+                    onClick={async () => {
+                      setLookingUp(true)
+                      const { data } = await lookupMealNutrition(mealForm.food_name)
+                      if (data) {
+                        setMealForm(f => ({
+                          ...f,
+                          calories_estimate: data.calories ?? f.calories_estimate,
+                          carbs_grams: data.carbs_grams ?? f.carbs_grams,
+                          protein_grams: data.protein_grams ?? f.protein_grams,
+                          fat_grams: data.fat_grams ?? f.fat_grams,
+                        }))
+                      }
+                      setLookingUp(false)
+                    }}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl border bg-primary-50 text-primary-700 text-sm font-medium hover:bg-primary-100 disabled:opacity-40 transition shrink-0"
+                    title="AI Lookup"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {lookingUp ? '…' : 'AI'}
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -109,6 +137,30 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
                     step="0.1"
                     value={mealForm.carbs_grams}
                     onChange={e => setMealForm({ ...mealForm, carbs_grams: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Protein (g)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={mealForm.protein_grams}
+                    onChange={e => setMealForm({ ...mealForm, protein_grams: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fat (g)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={mealForm.fat_grams}
+                    onChange={e => setMealForm({ ...mealForm, fat_grams: e.target.value })}
                     className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                   />
                 </div>
