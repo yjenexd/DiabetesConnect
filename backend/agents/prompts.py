@@ -137,5 +137,17 @@ TOOL_DEFINITIONS = [
         "description": "Get the patient's pending referrals and appointments.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "analyse_meal_photo",
+        "description": "Log a meal identified from a food photo. Use this after Claude Vision has described the food in the image.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "Description of the food identified in the photo"},
+                "meal_context": {"type": "string", "description": "hawker_food, home_cooked, or restaurant"},
+            },
+            "required": ["description"],
+        },
+    },
 ]
 
