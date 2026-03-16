@@ -199,8 +199,14 @@ git merge main    # Get everyone else's changes
 **Terminal 1 — Backend:**
 ```bash
 cd backend
+./venv/bin/python -m uvicorn main:app --reload --port 8000
+```
+
+Or with activation (if you prefer):
+```bash
+cd backend
 source venv/bin/activate
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --reload --port 8000
 ```
 
 **Terminal 2 — Frontend:**

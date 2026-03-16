@@ -528,85 +528,50 @@ Return JSON only."""
 
 
 def _mock_localise_response(english_text: str, target_language: str) -> str:
-    """Mock localisation - transform English into other Singapore languages without API."""
+    """Mock localisation — now a light refinement pass.
+    
+    Since Claude already responds in the target language (via language-aware prompt),
+    this function only applies minor Singaporean doctor persona touches.
+    If the response is already in the correct language, we mostly pass it through.
+    """
     if target_language == "english":
         return english_text
 
-    # Simple translation mappings for common healthcare phrases
-    translations = {
-        "mandarin": {
-            "Your blood sugar is": "您的血糖",
-            "a bit high": "有点偏高",
-            "too high": "太高",
-            "a bit low": "有点偏低",
-            "carbs": "碳水化合物",
-            "Try a short walk": "建议散步",
-            "after your meal": "饭后",
-            "medication": "药物",
-            "Take your": "请服用你的",
-        },
-        "malay": {
-            "Your blood sugar is": "Gula darah awak",
-            "a bit high": "agak tinggi",
-            "too high": "terlalu tinggi",
-            "a bit low": "agak rendah",
-            "carbs": "karbohidrat",
-            "Try a short walk": "Cuba jalan kaki",
-            "after your meal": "selepas makan",
-            "medication": "ubat",
-        },
-        "singlish": {
-            "Your": "Your",  # Keep structure, add particles
-            "Try": "Try",
-        },
-    }
+    # Since Claude now responds in the target language directly,
+    # mock localisation is just a light refinement — no heavy translation needed.
 
-    result = english_text
-
-    if target_language == "mandarin":
-        # Simple phrase substitution for demo
-        for en, cn in translations["mandarin"].items():
-            result = result.replace(en, cn)
-        logger.debug("Mock Mandarin localisation applied")
-
-    elif target_language == "malay":
-        for en, ms in translations["malay"].items():
-            result = result.replace(en, ms)
-        logger.debug("Mock Malay localisation applied")
-
-    elif target_language == "singlish":
-        # Add Singlish particles to sentence endings
-        particles = ["lah", "leh", "lor", "meh"]
-        sentences = result.split(". ")
-        localised = []
-        for i, sent in enumerate(sentences):
-            if sent.strip() and not sent.strip().endswith(("!", "?", "lah", "leh", "lor")):
-                particle = particles[i % len(particles)]
-                localised.append(f"{sent.strip()} {particle}")
-            else:
-                localised.append(sent.strip())
-        result = ". ".join(localised)
-        logger.debug("Mock Singlish localisation applied")
+    if target_language == "singlish":
+        # Light touch: ensure natural Singlish particles if missing
+        particles_present = any(p in english_text.lower() for p in ['lah', 'leh', 'lor', 'sia', 'hor'])
+        if not particles_present:
+            sentences = english_text.split(". ")
+            particles = ["lah", "leh", "lor", "hor"]
+            localised = []
+            for i, sent in enumerate(sentences):
+                if sent.strip() and not sent.strip().endswith(("!", "?")):
+                    localised.append(f"{sent.strip()} {particles[i % len(particles)]}")
+                else:
+                    localised.append(sent.strip())
+            return ". ".join(localised)
+        logger.debug("Mock Singlish refinement applied")
 
     elif target_language == "singlish_mandarin_mix":
-        # Mix English with some Mandarin and particles
-        # Apply some Mandarin first
-        for en, cn in translations["mandarin"].items():
-            if en.lower() in result.lower():
-                result = result.replace(en, f"{cn} ({en})")
-        # Add particles
-        sentences = result.split(". ")
-        localised = []
-        for i, sent in enumerate(sentences):
-            if sent.strip() and not sent.strip().endswith(("!", "?", "lah", "leh", "lor")):
-                particle = ["lah", "leh", "lor"][i % 3]
-                localised.append(f"{sent.strip()} {particle}")
-            else:
-                localised.append(sent.strip())
-        result = ". ".join(localised)
-        logger.debug("Mock Singlish/Mandarin mix localisation applied")
+        # Light touch: ensure mix particles if missing
+        particles_present = any(p in english_text.lower() for p in ['lah', 'leh', 'lor'])
+        if not particles_present:
+            sentences = english_text.split(". ")
+            localised = []
+            for i, sent in enumerate(sentences):
+                if sent.strip() and not sent.strip().endswith(("!", "?")):
+                    localised.append(f"{sent.strip()} {['lah', 'leh', 'lor'][i % 3]}")
+                else:
+                    localised.append(sent.strip())
+            return ". ".join(localised)
+        logger.debug("Mock Singlish/Mandarin mix refinement applied")
 
-    return result
+    # For mandarin and malay: Claude already responds in those languages,
+    # so pass through as-is (no crude find-replace).
+    return english_text
 
 
 async def localise_response(english_text: str, target_language: str) -> str:
