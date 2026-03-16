@@ -1,28 +1,20 @@
-# Environment variable files
+# Ignore environment variable files, except for the example file
+# Copy .env.example to your own .env.local file, and they paste in the API key values yourself
 .env
 .env.*
 !.env.example
 
+# `npm i` installs these, and it can be very large.
+node_modules/
+
 # Python
+venv/
 __pycache__/
 *.pyc
 *.pyo
-venv/
+
+# Database
 *.db
 
-# Node
-node_modules/
-
-venv/
-.venv/
-*.egg-info
-__pycache__/
-.pytest_cache/
-*.pyc
-
-*.db
-*.sqlite
-*.sqlite3
-
-.vscode/
-.idea/
+# macOS
+.DS_Store
