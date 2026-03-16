@@ -17,25 +17,12 @@ _nutrition_cache: dict = {}
 def uid():
     return str(uuid4())[:8]
 
+async def fetch_patient_dashboard(patient_id: str, *, include_hidden_recommendations: bool = False):
+    """Fetch dashboard payload.
 
-def _parse_dose_times(frequency: str) -> list[str]:
-    """Parse a medication frequency string into a list of 24h dose times."""
-    freq = frequency.lower()
-    if "3x" in freq or "three" in freq:
-        return ["08:00", "14:00", "20:00"]
-    if "2x" in freq or "twice" in freq or "two" in freq or "am/pm" in freq or "bd" in freq:
-        return ["08:00", "20:00"]
-    if "morning" in freq or "am" in freq:
-        return ["08:00"]
-    if "evening" in freq or "night" in freq or "bedtime" in freq or "pm" in freq or "od" in freq:
-        return ["20:00"]
-    # Default: single daily dose at 8am
-    return ["08:00"]
-
-
-@router.get("/patients/{patient_id}/dashboard")
-async def get_patient_dashboard(patient_id: str):
-    """Get full patient dashboard data."""
+    Patient view should not include hidden recommendations (draft/preview).
+    Doctor preview may request them via `include_hidden_recommendations=True`.
+    """
     patient = await fetch_one("SELECT * FROM patients WHERE id = ?", (patient_id,))
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -63,10 +50,18 @@ async def get_patient_dashboard(patient_id: str):
         "SELECT id, name, dosage, frequency, active FROM medications WHERE patient_id = ? AND active = 1",
         (patient_id,)
     )
-    recommendations = await fetch_all(
-        "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? ORDER BY created_at DESC LIMIT 5",
-        (patient_id,)
-    )
+
+    if include_hidden_recommendations:
+        recommendations = await fetch_all(
+            "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? ORDER BY created_at DESC LIMIT 10",
+            (patient_id,)
+        )
+    else:
+        recommendations = await fetch_all(
+            "SELECT id, content, recommendation_type, status, created_at FROM recommendations WHERE patient_id = ? AND status IN ('sent','acknowledged') ORDER BY created_at DESC LIMIT 5",
+            (patient_id,)
+        )
+
     goals = await fetch_all(
         "SELECT id, goal_type, target_value, target_unit, description, compliance_rate FROM lifestyle_goals WHERE patient_id = ? AND active = 1",
         (patient_id,)
@@ -92,6 +87,26 @@ async def get_patient_dashboard(patient_id: str):
         "referrals": referrals,
         "history_requests": history_requests,
     }
+
+
+def _parse_dose_times(frequency: str) -> list[str]:
+    """Parse a medication frequency string into a list of 24h dose times."""
+    freq = frequency.lower()
+    if "3x" in freq or "three" in freq:
+        return ["08:00", "14:00", "20:00"]
+    if "2x" in freq or "twice" in freq or "two" in freq or "am/pm" in freq or "bd" in freq:
+        return ["08:00", "20:00"]
+    if "morning" in freq or "am" in freq:
+        return ["08:00"]
+    if "evening" in freq or "night" in freq or "bedtime" in freq or "pm" in freq or "od" in freq:
+        return ["20:00"]
+    return ["08:00"]
+
+
+@router.get("/patients/{patient_id}/dashboard")
+async def get_patient_dashboard(patient_id: str):
+    """Get full patient dashboard data."""
+    return await fetch_patient_dashboard(patient_id, include_hidden_recommendations=False)
 
 
 @router.get("/meals/lookup")
@@ -140,7 +155,6 @@ async def get_med_schedule(patient_id: str):
     today = now.date()
     days = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
 
-    # Fetch all med logs for the past 7 days
     week_start = days[0].isoformat()
     med_logs = await fetch_all(
         "SELECT medication_name, action, scheduled_time, actual_time FROM med_logs "
@@ -154,7 +168,6 @@ async def get_med_schedule(patient_id: str):
         for day in days:
             for time_str in dose_times:
                 slot_dt = datetime.fromisoformat(f"{day.isoformat()}T{time_str}:00")
-                # Find a matching log (within ±2h of scheduled slot)
                 matched_log = None
                 for log in med_logs:
                     if log["medication_name"] != med["name"]:
@@ -171,7 +184,7 @@ async def get_med_schedule(patient_id: str):
                         break
 
                 if matched_log:
-                    status = matched_log["action"]  # taken / skipped / delayed
+                    status = matched_log["action"]
                 elif slot_dt < now:
                     status = "missed"
                 else:
