@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench, Check, X } from 'lucide-react'
+import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench, Check, X, ClipboardList } from 'lucide-react'
 import { sendChatMessage, getChatHistory, confirmMealLog, logMedicationManual } from '../shared/api'
 import VoiceRecorder from './VoiceRecorder'
 import PhotoUpload from './PhotoUpload'
@@ -207,6 +207,7 @@ export default function ChatInterface() {
       alertsGenerated: data?.alerts_generated || [],
       pendingMeals,
       pendingMedications,
+      pendingTasks: data?.pending_tasks || [],
     }
   }
 
@@ -429,6 +430,25 @@ export default function ChatInterface() {
               }}
             />
           ))}
+
+          {msg.role === 'assistant' && msg.pendingTasks?.length > 0 && (
+            <div className="flex justify-start mt-1">
+              <div className="max-w-[80%] rounded-2xl rounded-bl-md border bg-blue-50 px-4 py-3 shadow-sm">
+                <p className="text-[11px] font-semibold text-blue-600 uppercase mb-2 flex items-center gap-1">
+                  <ClipboardList className="w-3 h-3" /> Pending tasks
+                </p>
+                <div className="space-y-1.5">
+                  {msg.pendingTasks.map((task, taskIdx) => (
+                    <div key={taskIdx} className="text-xs text-gray-700">
+                      <span className="font-medium">{task.title}</span>
+                      {task.due && <span className="text-gray-400 ml-1">· {task.due}</span>}
+                      <p className="text-gray-500 mt-0.5">{task.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           </div>
         ))}
         {loading && (

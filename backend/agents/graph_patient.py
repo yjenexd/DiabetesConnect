@@ -57,7 +57,7 @@ async def _get_pending_tasks(patient_id: str):
 
 def _format_pending_task_update(pending_tasks):
     if not pending_tasks:
-        return "\n\nPending tasks: None right now."
+        return ""
 
     lines = ["\n\nPending tasks for you:"]
     for task in pending_tasks:
@@ -272,7 +272,7 @@ async def run_patient_chat(state: PatientChatState) -> PatientChatState:
     english_response = state.get("english_response", "").strip()
     if photo_declaration:
         english_response = f"{photo_declaration}\n\n{english_response}".strip()
-    state["english_response"] = (english_response + _format_pending_task_update(pending_tasks)).strip()
+    state["english_response"] = english_response
 
     # ── Collect pending confirmations ──
     pending_meals = []
@@ -321,9 +321,11 @@ async def run_patient_chat(state: PatientChatState) -> PatientChatState:
         "INSERT INTO chat_messages (id, patient_id, role, content, language, timestamp) VALUES (?,?,?,?,?,datetime('now'))",
         (str(uuid4())[:8], patient_id, "patient", text_input, state.get("detected_language", "english"))
     )
+    saved_response = state.get("localised_response") or state.get("english_response", "")
+    saved_language = state.get("detected_language", "english")
     await execute(
         "INSERT INTO chat_messages (id, patient_id, role, content, language, timestamp) VALUES (?,?,?,?,?,datetime('now'))",
-        (str(uuid4())[:8], patient_id, "assistant", state.get("english_response", ""), "english")
+        (str(uuid4())[:8], patient_id, "assistant", saved_response, saved_language)
     )
 
     return state
