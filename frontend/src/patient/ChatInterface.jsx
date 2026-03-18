@@ -299,7 +299,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 animate-slide-up-screen">
       {/* Header */}
       <div className="bg-primary-600 text-white px-4 py-3 flex items-center gap-3 shrink-0">
         <button onClick={() => navigate(`/patient/${id}`)} className="p-1">

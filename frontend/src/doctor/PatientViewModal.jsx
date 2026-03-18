@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { getPatientView } from '../shared/api'
 import GlucoseChart from '../shared/GlucoseChart'
@@ -17,9 +18,9 @@ export default function PatientViewModal({ patientId, onClose }) {
     })()
   }, [patientId])
 
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-50 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+  const modal = (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-gray-50 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col animate-scale-in">
         {/* Header mimicking patient app */}
         <div className="bg-primary-600 text-white px-4 py-3 flex items-center justify-between shrink-0">
           <div>
@@ -108,4 +109,5 @@ export default function PatientViewModal({ patientId, onClose }) {
       </div>
     </div>
   )
+  return createPortal(modal, document.body)
 }

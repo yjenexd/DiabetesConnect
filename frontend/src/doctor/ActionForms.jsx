@@ -41,8 +41,8 @@ export default function ActionForms({ actionType, patientId, onClose, onSuccess 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto animate-scale-in">
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-lg font-bold text-gray-800">{TITLES[actionType]}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>

@@ -20,8 +20,8 @@ export default function DashboardPreview({ patientId, pendingRecommendation, pen
   const hiddenRecs = data?.recommendations?.filter(r => r.status !== 'sent' && r.status !== 'acknowledged') || []
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-50 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-gray-50 rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
         {/* Banner */}
         <div className="bg-amber-100 border-b border-amber-200 px-4 py-2 flex items-center justify-between sticky top-0 z-10 rounded-t-2xl">
           <div className="flex items-center gap-2">

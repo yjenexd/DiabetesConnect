@@ -22,12 +22,12 @@ export default function PatientList({ patients = [], selectedId, onSelect }) {
   }
 
   return (
-    <div className="divide-y">
+    <div className="divide-y stagger-children">
       {patients.map(p => (
         <button
           key={p.id}
           onClick={() => onSelect(p.id)}
-          className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition ${
+          className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition animate-slide-left ${
             selectedId === p.id ? 'bg-primary-50 border-l-4 border-primary-600' : ''
           }`}
         >

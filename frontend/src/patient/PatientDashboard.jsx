@@ -157,22 +157,22 @@ export default function PatientDashboard() {
       <div className="p-4 space-y-4">
 
         {/* Row 1: 3 stat cards spanning full width */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center">
+        <div className="grid grid-cols-3 gap-4 stagger-children">
+          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center animate-fade-up">
             <div className={`text-3xl font-bold ${latestGlucose?.value_mmol > 10 ? 'text-red-600' : latestGlucose?.value_mmol > 7 ? 'text-yellow-600' : 'text-green-600'}`}>
               {latestGlucose?.value_mmol || '—'}
             </div>
             <div className="text-xs text-gray-500 mt-1 text-center">Latest Glucose (mmol/L)</div>
             <div className="text-[10px] text-gray-400 mt-0.5">{fmtDate(`${summaryDate}T00:00:00`)}</div>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center">
+          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center animate-fade-up">
             <div className={`text-3xl font-bold ${todayMedsMissed > 0 ? 'text-red-600' : todayMedsTaken > 0 ? 'text-green-600' : 'text-yellow-600'}`}>
               {todayMedsTaken}<span className="text-gray-300">/</span>{todayMedsMissed}
             </div>
             <div className="text-xs text-gray-500 mt-1 text-center">Meds Taken / Missed</div>
             <div className="text-[10px] text-gray-400 mt-0.5">Today</div>
           </div>
-          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center">
+          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col items-center justify-center animate-fade-up">
             <div className="text-3xl font-bold text-primary-600">{todayMeals}</div>
             <div className="text-xs text-gray-500 mt-1 text-center">Meals Logged</div>
             <div className="text-[10px] text-gray-400 mt-0.5">Today</div>
@@ -180,7 +180,7 @@ export default function PatientDashboard() {
         </div>
 
         {/* Row 2: Glucose chart + Medication grid side by side */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 animate-fade-up" style={{ animationDelay: '100ms' }}>
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-gray-500 uppercase flex items-center gap-1">
@@ -345,7 +345,7 @@ export default function PatientDashboard() {
         })()}
 
         {/* Row 4: Doctor's Notes / Goals / Upcoming Actions */}
-        <div className="space-y-4">
+        <div className="space-y-4 animate-fade-up" style={{ animationDelay: '200ms' }}>
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
             <h2 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
               <AlertTriangle className="w-4 h-4" /> Doctor's Notes
@@ -403,7 +403,8 @@ export default function PatientDashboard() {
         {/* Chat Button — full width */}
         <button
           onClick={() => navigate(`/patient/${id}/chat`)}
-          className="w-full bg-primary-600 text-white py-4 rounded-xl text-lg font-semibold flex items-center justify-center gap-2 shadow-lg active:bg-primary-700 transition"
+          className="w-full bg-primary-600 text-white py-4 rounded-xl text-lg font-semibold flex items-center justify-center gap-2 shadow-lg hover:bg-primary-700 active:bg-primary-800 transition animate-fade-up"
+          style={{ animationDelay: '250ms' }}
         >
           <MessageCircle className="w-6 h-6" /> Chat with Companion
         </button>
@@ -435,8 +436,8 @@ export default function PatientDashboard() {
 
       {/* History Response Modal */}
       {activeHistoryRequest && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 backdrop-blur-sm sm:items-center animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-scale-in">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Respond to Doctor</h3>

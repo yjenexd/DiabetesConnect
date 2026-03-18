@@ -56,7 +56,7 @@ export default function PatientDetail({ patientId, onRefresh }) {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="p-6 space-y-6 max-w-4xl animate-fade-up">
       {/* 1. Patient Header */}
       <div className="bg-white rounded-xl shadow-sm border p-5">
         <div className="flex items-start justify-between">
@@ -91,8 +91,8 @@ export default function PatientDetail({ patientId, onRefresh }) {
       </div>
 
       {/* 2. Key Metrics */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className={`rounded-xl p-4 ${metricColor('glucose', avgGlucose)}`}>
+      <div className="grid grid-cols-3 gap-4 stagger-children">
+        <div className={`rounded-xl p-4 animate-fade-up ${metricColor('glucose', avgGlucose)}`}>
           <p className="text-xs font-medium opacity-70">Avg Glucose (7d)</p>
           <p className="text-2xl font-bold">{avgGlucose ?? '—'} <span className="text-sm font-normal">mmol/L</span></p>
         </div>
