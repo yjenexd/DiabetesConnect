@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
+from collections import defaultdict
+import math
 import re
 
 from database.db import fetch_all, fetch_one, execute
@@ -12,6 +14,16 @@ router = APIRouter()
 
 # Simple in-memory cache for nutrition lookups
 _nutrition_cache: dict = {}
+
+
+@router.get("/patients")
+async def list_all_patients():
+    """List all available patient profiles."""
+    patients = await fetch_all(
+        "SELECT id, name, age, gender, diabetes_type, diagnosis_year, language_preference FROM patients ORDER BY name",
+        ()
+    )
+    return {"patients": patients}
 
 
 def uid():
@@ -101,6 +113,47 @@ def _parse_dose_times(frequency: str) -> list[str]:
     if "evening" in freq or "night" in freq or "bedtime" in freq or "pm" in freq or "od" in freq:
         return ["20:00"]
     return ["08:00"]
+
+
+def _infer_nearest_scheduled_time(frequency: str, now: datetime) -> str:
+    dose_times = _parse_dose_times(frequency or "1x daily")
+    candidates = []
+    for time_24h in dose_times:
+        hour, minute = [int(part) for part in time_24h.split(":")]
+        candidates.append(now.replace(hour=hour, minute=minute, second=0, microsecond=0))
+
+    nearest = min(candidates, key=lambda dt: abs((dt - now).total_seconds())) if candidates else now
+    return nearest.isoformat()
+
+
+async def _resolve_active_medication(patient_id: str, medication_name: str):
+    meds = await fetch_all(
+        "SELECT id, name, frequency FROM medications WHERE patient_id = ? AND active = 1",
+        (patient_id,),
+    )
+    if not meds:
+        return None
+
+    target = (medication_name or "").strip().lower()
+    exact = next((m for m in meds if (m.get("name") or "").strip().lower() == target), None)
+    if exact:
+        return exact
+
+    partial = next(
+        (
+            m
+            for m in meds
+            if target and (target in (m.get("name") or "").lower() or (m.get("name") or "").lower() in target)
+        ),
+        None,
+    )
+    if partial:
+        return partial
+
+    if len(meds) == 1:
+        return meds[0]
+
+    return None
 
 
 @router.get("/patients/{patient_id}/dashboard")
@@ -249,6 +302,8 @@ async def log_glucose_manual(patient_id: str, reading: GlucoseLog):
 class MedLog(BaseModel):
     medication_name: str
     action: str = "taken"
+    reason: Optional[str] = None
+    scheduled_time: Optional[str] = None
 
 
 @router.post("/patients/{patient_id}/medications/log")
@@ -256,12 +311,45 @@ async def log_medication_manual(patient_id: str, log: MedLog):
     patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+
+    valid_actions = {"taken", "skipped", "delayed"}
+    if log.action not in valid_actions:
+        raise HTTPException(status_code=400, detail="Invalid medication action")
+
+    now = datetime.now()
+    resolved_med = await _resolve_active_medication(patient_id, log.medication_name)
+    medication_id = resolved_med.get("id") if resolved_med else None
+    medication_name = resolved_med.get("name") if resolved_med else log.medication_name
+    frequency = resolved_med.get("frequency") if resolved_med else "1x daily"
+
+    scheduled_time = log.scheduled_time
+    if not scheduled_time:
+        scheduled_time = _infer_nearest_scheduled_time(frequency, now)
+
+    actual_time = now.isoformat() if log.action in {"taken", "delayed"} else None
+
     log_id = uid()
     await execute(
-        "INSERT INTO med_logs (id, patient_id, medication_name, action, actual_time, logged_via) VALUES (?,?,?,?,?,?)",
-        (log_id, patient_id, log.medication_name, log.action, datetime.now().isoformat(), "manual")
+        "INSERT INTO med_logs (id, patient_id, medication_id, medication_name, action, scheduled_time, actual_time, reason_if_skipped, logged_via) VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            log_id,
+            patient_id,
+            medication_id,
+            medication_name,
+            log.action,
+            scheduled_time,
+            actual_time,
+            log.reason,
+            "manual",
+        )
     )
-    return {"success": True, "log_id": log_id}
+    return {
+        "success": True,
+        "log_id": log_id,
+        "medication_name": medication_name,
+        "scheduled_time": scheduled_time,
+        "action": log.action,
+    }
 
 
 class HistoryResponse(BaseModel):
@@ -294,3 +382,145 @@ async def get_referrals(patient_id: str):
         (patient_id,)
     )
     return {"referrals": refs}
+
+
+def _postprandial_curve(minutes_since_meal: float, peak_minutes: float = 60.0) -> float:
+    """Return 0-1 value modelling the postprandial glucose response shape.
+
+    Uses a gamma-like curve: f(t) = (t/peak) * e^(1 - t/peak).
+    Peaks at t = peak_minutes, decays afterwards.
+    """
+    if minutes_since_meal < 0:
+        return 0.0
+    t = minutes_since_meal / peak_minutes
+    return max(0.0, t * math.exp(1 - t))
+
+
+@router.get("/patients/{patient_id}/glucose-profile")
+async def get_glucose_profile(patient_id: str):
+    """Compute the patient's glucose response profile learned from historical data.
+
+    Returns baseline fasting level, carbohydrate response factor,
+    hourly averages, and a synthesised daily pattern curve.
+    """
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    # Fetch historical data (up to 90 readings / meals)
+    readings = await fetch_all(
+        "SELECT value_mmol, measurement_time, context FROM glucose_readings "
+        "WHERE patient_id = ? ORDER BY measurement_time DESC LIMIT 90",
+        (patient_id,),
+    )
+    meals = await fetch_all(
+        "SELECT food_name, carbs_grams, meal_time, meal_type FROM meals "
+        "WHERE patient_id = ? ORDER BY meal_time DESC LIMIT 90",
+        (patient_id,),
+    )
+
+    now = datetime.now()
+    today_iso = now.strftime("%Y-%m-%d")
+
+    # ── 1. Baseline fasting glucose (excl. today) ──
+    fasting_readings = [
+        r for r in readings
+        if r.get("context") == "fasting" and r["measurement_time"][:10] != today_iso
+    ]
+    baseline_fasting = (
+        round(sum(r["value_mmol"] for r in fasting_readings) / len(fasting_readings), 1)
+        if fasting_readings
+        else 5.5
+    )
+
+    # ── 2. Carb response factor (mmol/L rise per 10 g carbs) ──
+    #   Match each historical meal with the closest pre-meal and post-meal glucose readings.
+    carb_response_factor = 0.5  # default
+    pair_factors: list[float] = []
+
+    historical_meals = [m for m in meals if m["meal_time"][:10] != today_iso and (m.get("carbs_grams") or 0) > 0]
+    historical_readings = [r for r in readings if r["measurement_time"][:10] != today_iso]
+
+    for meal in historical_meals:
+        meal_dt = datetime.fromisoformat(meal["meal_time"][:19])
+        carbs = meal["carbs_grams"]
+
+        pre_candidates = []
+        post_candidates = []
+        for r in historical_readings:
+            r_dt = datetime.fromisoformat(r["measurement_time"][:19])
+            diff_min = (r_dt - meal_dt).total_seconds() / 60
+            if -180 <= diff_min <= 0:
+                pre_candidates.append((r, abs(diff_min)))
+            elif 30 <= diff_min <= 180:
+                post_candidates.append((r, diff_min))
+
+        if pre_candidates and post_candidates:
+            pre = min(pre_candidates, key=lambda x: x[1])[0]
+            post = min(post_candidates, key=lambda x: abs(x[1] - 90))[0]  # closest to 90 min
+            rise = post["value_mmol"] - pre["value_mmol"]
+            if rise > 0 and carbs > 0:
+                pair_factors.append(rise / (carbs / 10))
+
+    if pair_factors:
+        carb_response_factor = round(sum(pair_factors) / len(pair_factors), 2)
+
+    # ── 3. Hourly averages from historical readings ──
+    hourly_buckets: dict[int, list[float]] = defaultdict(list)
+    for r in historical_readings:
+        hour = datetime.fromisoformat(r["measurement_time"][:19]).hour
+        hourly_buckets[hour].append(r["value_mmol"])
+
+    hourly_averages = {
+        str(h): round(sum(vals) / len(vals), 1) for h, vals in hourly_buckets.items()
+    }
+
+    # ── 4. Synthesised daily pattern (24 half-hour points, 6 AM – midnight) ──
+    #   Uses historical average meal times + carb amounts + the learned carb_response_factor
+    #   to project a smooth "typical day" glucose curve for this patient.
+
+    # Determine typical meal hours and average carbs from historical data
+    meal_hour_carbs: dict[int, list[float]] = defaultdict(list)
+    for m in historical_meals:
+        hour = datetime.fromisoformat(m["meal_time"][:19]).hour
+        meal_hour_carbs[hour].append(m.get("carbs_grams") or 30)
+
+    typical_meals = {
+        h: round(sum(carbs_list) / len(carbs_list), 1) for h, carbs_list in meal_hour_carbs.items()
+    }
+
+    peak_minutes = 60.0
+    daily_pattern: list[dict] = []
+    for half_hour_idx in range(36):  # 6:00 to 23:30
+        total_minutes = 360 + half_hour_idx * 30
+        hour = total_minutes // 60
+        minute = total_minutes % 60
+        time_label = f"{hour:02d}:{minute:02d}"
+
+        value = baseline_fasting
+        for meal_hour, avg_carbs in typical_meals.items():
+            t = total_minutes - (meal_hour * 60)  # minutes since typical meal
+            if 0 <= t <= 240:
+                max_rise = carb_response_factor * avg_carbs / 10.0
+                value += max_rise * _postprandial_curve(t, peak_minutes)
+
+        daily_pattern.append({"time": time_label, "value": round(value, 1)})
+
+    # ── 5. Average post-meal rise (supplementary stat) ──
+    post_meal_readings = [r for r in historical_readings if r.get("context") == "post_meal"]
+    avg_post_meal_rise = None
+    if post_meal_readings and baseline_fasting:
+        avg_post = sum(r["value_mmol"] for r in post_meal_readings) / len(post_meal_readings)
+        avg_post_meal_rise = round(avg_post - baseline_fasting, 1)
+
+    data_days = len(set(r["measurement_time"][:10] for r in historical_readings))
+
+    return {
+        "baseline_fasting": baseline_fasting,
+        "carb_response_factor": carb_response_factor,
+        "avg_post_meal_rise": avg_post_meal_rise,
+        "peak_time_minutes": peak_minutes,
+        "hourly_averages": hourly_averages,
+        "daily_pattern": daily_pattern,
+        "data_days": data_days,
+    }
