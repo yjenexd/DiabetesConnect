@@ -39,7 +39,7 @@ async def fetch_patient_dashboard(patient_id: str, *, include_hidden_recommendat
         (patient_id,)
     )
     meals = await fetch_all(
-        "SELECT id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, meal_time, meal_type, cultural_context, logged_via FROM meals WHERE patient_id = ? ORDER BY meal_time DESC LIMIT 30",
+        "SELECT id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, sodium_mg, sugar_grams, meal_time, meal_type, cultural_context, logged_via FROM meals WHERE patient_id = ? ORDER BY meal_time DESC LIMIT 30",
         (patient_id,)
     )
     med_logs = await fetch_all(
@@ -128,6 +128,7 @@ async def lookup_meal_nutrition(food_name: str):
                 "You are a nutritional database for Singaporean and Southeast Asian cuisine. "
                 "Return ONLY valid JSON with these keys: food_name, calories (integer), "
                 "carbs_grams (number), protein_grams (number), fat_grams (number), "
+                "sodium_mg (integer), sugar_grams (number), "
                 "cultural_context (hawker_food|home_cooked|restaurant). No extra text."
             ),
             messages=[{"role": "user", "content": f"Nutritional info for: {food_name}"}],
@@ -207,6 +208,8 @@ class MealLog(BaseModel):
     carbs_grams: Optional[float] = None
     protein_grams: Optional[float] = None
     fat_grams: Optional[float] = None
+    sodium_mg: Optional[float] = None
+    sugar_grams: Optional[float] = None
     meal_type: str = "snack"
 
 
@@ -217,9 +220,10 @@ async def log_meal_manual(patient_id: str, meal: MealLog):
         raise HTTPException(status_code=404, detail="Patient not found")
     meal_id = uid()
     await execute(
-        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, meal_time, meal_type, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, sodium_mg, sugar_grams, meal_time, meal_type, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (meal_id, patient_id, meal.food_name, meal.calories_estimate, meal.carbs_grams,
-         meal.protein_grams, meal.fat_grams, datetime.now().isoformat(), meal.meal_type, "manual")
+         meal.protein_grams, meal.fat_grams, meal.sodium_mg, meal.sugar_grams,
+         datetime.now().isoformat(), meal.meal_type, "manual")
     )
     return {"success": True, "meal_id": meal_id}
 

@@ -78,6 +78,8 @@ export default function MealDetailModal({ meal, onClose }) {
           <MacroBar label="Carbohydrates" value={meal.carbs_grams} unit="g" color="text-yellow-600" />
           <MacroBar label="Protein" value={meal.protein_grams} unit="g" color="text-blue-600" />
           <MacroBar label="Fat" value={meal.fat_grams} unit="g" color="text-red-500" />
+          <MacroBar label="Sodium" value={meal.sodium_mg} unit="mg" color="text-purple-600" />
+          <MacroBar label="Sugar" value={meal.sugar_grams} unit="g" color="text-pink-500" />
         </div>
 
         {/* Meta */}

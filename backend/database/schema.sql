@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS meals (
     carbs_grams REAL,
     protein_grams REAL,
     fat_grams REAL,
+    sodium_mg REAL,
+    sugar_grams REAL,
     meal_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     meal_type TEXT CHECK(meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
     photo_url TEXT,

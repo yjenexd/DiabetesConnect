@@ -12,7 +12,7 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
   const [tab, setTab] = useState(mode || 'meal')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [mealForm, setMealForm] = useState({ food_name: '', calories_estimate: '', carbs_grams: '', protein_grams: '', fat_grams: '', meal_type: 'lunch' })
+  const [mealForm, setMealForm] = useState({ food_name: '', calories_estimate: '', carbs_grams: '', protein_grams: '', fat_grams: '', sodium_mg: '', sugar_grams: '', meal_type: 'lunch' })
   const [lookingUp, setLookingUp] = useState(false)
   const [glucoseForm, setGlucoseForm] = useState({ value_mmol: '', context: 'pre_meal' })
   const [medForm, setMedForm] = useState({ medication_name: medications[0]?.name || '', action: 'taken' })
@@ -28,6 +28,8 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
         carbs_grams: mealForm.carbs_grams ? parseFloat(mealForm.carbs_grams) : null,
         protein_grams: mealForm.protein_grams ? parseFloat(mealForm.protein_grams) : null,
         fat_grams: mealForm.fat_grams ? parseFloat(mealForm.fat_grams) : null,
+        sodium_mg: mealForm.sodium_mg ? parseFloat(mealForm.sodium_mg) : null,
+        sugar_grams: mealForm.sugar_grams ? parseFloat(mealForm.sugar_grams) : null,
         meal_type: mealForm.meal_type,
       })
     } else if (tab === 'glucose') {
@@ -106,6 +108,8 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
                           carbs_grams: data.carbs_grams ?? f.carbs_grams,
                           protein_grams: data.protein_grams ?? f.protein_grams,
                           fat_grams: data.fat_grams ?? f.fat_grams,
+                          sodium_mg: data.sodium_mg ?? f.sodium_mg,
+                          sugar_grams: data.sugar_grams ?? f.sugar_grams,
                         }))
                       }
                       setLookingUp(false)
@@ -161,6 +165,30 @@ export default function ManualLogModal({ mode, patientId, medications = [], onCl
                     step="0.1"
                     value={mealForm.fat_grams}
                     onChange={e => setMealForm({ ...mealForm, fat_grams: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sodium (mg)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={mealForm.sodium_mg}
+                    onChange={e => setMealForm({ ...mealForm, sodium_mg: e.target.value })}
+                    className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sugar (g)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={mealForm.sugar_grams}
+                    onChange={e => setMealForm({ ...mealForm, sugar_grams: e.target.value })}
                     className="w-full border rounded-xl px-4 py-3 text-[16px] focus:ring-2 focus:ring-primary-400 focus:outline-none"
                   />
                 </div>

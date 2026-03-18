@@ -86,6 +86,16 @@ async def init_db():
     try:
         await db.executescript(schema)
         await db.commit()
+        # Migrations for existing databases
+        for migration in [
+            "ALTER TABLE meals ADD COLUMN sodium_mg REAL",
+            "ALTER TABLE meals ADD COLUMN sugar_grams REAL",
+        ]:
+            try:
+                await db.execute(migration)
+                await db.commit()
+            except Exception:
+                pass  # Column already exists
     finally:
         await db.close()
 

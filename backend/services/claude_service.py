@@ -17,7 +17,7 @@ def _get_client():
     return _client
 
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 def _strip_code_fences(text: str) -> str:

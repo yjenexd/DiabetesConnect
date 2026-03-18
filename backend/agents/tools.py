@@ -25,13 +25,14 @@ async def log_meal(patient_id: str, food_name: str, calories_estimate: int, carb
 async def confirm_log_meal(patient_id: str, food_name: str, calories_estimate: int,
                            carbs_grams: float, meal_type: str,
                            cultural_context: str = "hawker_food", protein_grams: float = 0.0,
-                           fat_grams: float = 0.0, **_) -> dict:
+                           fat_grams: float = 0.0, sodium_mg: float = 0.0,
+                           sugar_grams: float = 0.0, **_) -> dict:
     """Actually insert the meal into the database after user confirmation."""
     meal_id = uid()
     await execute(
-        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, sodium_mg, sugar_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (meal_id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams,
-         datetime.now().isoformat(), meal_type, cultural_context, "chatbot")
+         sodium_mg, sugar_grams, datetime.now().isoformat(), meal_type, cultural_context, "chatbot")
     )
     return {"success": True, "meal_id": meal_id, "food_name": food_name}
 

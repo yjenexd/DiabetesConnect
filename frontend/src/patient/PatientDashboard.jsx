@@ -32,6 +32,7 @@ export default function PatientDashboard() {
   const [activeHistoryRequest, setActiveHistoryRequest] = useState(null)
   const [historyResponse, setHistoryResponse] = useState('')
   const [submittingHistory, setSubmittingHistory] = useState(false)
+  const [showMealHistory, setShowMealHistory] = useState(false)
 
   useEffect(() => { loadData() }, [id])
 
@@ -152,80 +153,147 @@ export default function PatientDashboard() {
           </div>
         </div>
 
-        {/* Row 3: Recent Meals + Doctor's Notes / Goals side by side */}
-        <div className="grid grid-cols-2 gap-4">
-          {/* Left: Recent Meals */}
-          {data.meals?.length > 0 && (
+        {/* Row 3: Today's Nutrition (merged with meal history toggle) */}
+        {(() => {
+          const todayMealsList = data.meals?.filter(m => m.meal_time?.startsWith(summaryDate)) || []
+          const totals = todayMealsList.reduce((acc, m) => ({
+            calories: acc.calories + (m.calories_estimate || 0),
+            carbs: acc.carbs + (m.carbs_grams || 0),
+            protein: acc.protein + (m.protein_grams || 0),
+            fat: acc.fat + (m.fat_grams || 0),
+            sodium: acc.sodium + (m.sodium_mg || 0),
+            sugar: acc.sugar + (m.sugar_grams || 0),
+          }), { calories: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, sugar: 0 })
+
+          const nutrients = [
+            { label: 'Calories', value: Math.round(totals.calories), unit: 'kcal', warn: 1600, danger: 2000 },
+            { label: 'Carbs', value: Math.round(totals.carbs * 10) / 10, unit: 'g', warn: 100, danger: 130 },
+            { label: 'Protein', value: Math.round(totals.protein * 10) / 10, unit: 'g', warn: 60, danger: 80 },
+            { label: 'Fat', value: Math.round(totals.fat * 10) / 10, unit: 'g', warn: 55, danger: 70 },
+            { label: 'Sodium', value: Math.round(totals.sodium), unit: 'mg', warn: 1800, danger: 2300 },
+            { label: 'Sugar', value: Math.round(totals.sugar * 10) / 10, unit: 'g', warn: 20, danger: 25 },
+          ]
+
+          function barColor(value, warn, danger) {
+            if (value >= danger) return 'bg-red-500'
+            if (value >= warn) return 'bg-yellow-400'
+            return 'bg-green-500'
+          }
+          function textColor(value, warn, danger) {
+            if (value >= danger) return 'text-red-600'
+            if (value >= warn) return 'text-yellow-600'
+            return 'text-gray-700'
+          }
+
+          return (
             <div className="bg-white rounded-xl shadow-sm p-4">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
-                <Utensils className="w-4 h-4" /> Recent Meals
-              </h2>
-              <div className="divide-y">
-                {data.meals.slice(0, 7).map(meal => (
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase flex items-center gap-1">
+                  <Utensils className="w-4 h-4" /> Today's Nutrition
+                  <span className="ml-1 text-[10px] font-normal text-gray-400 normal-case">{fmtDate(`${summaryDate}T00:00:00`)}</span>
+                </h2>
+                {data.meals?.length > 0 && (
                   <button
-                    key={meal.id}
-                    onClick={() => setSelectedMeal(meal)}
-                    className="w-full text-left py-2.5 flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 transition"
+                    onClick={() => setShowMealHistory(h => !h)}
+                    className="text-xs text-primary-600 font-medium hover:text-primary-800 transition"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{meal.food_name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{fmt24h(meal.meal_time)} · {fmtDate(meal.meal_time)}</p>
-                    </div>
-                    <div className="text-right text-xs text-gray-500 ml-2 shrink-0">
-                      {meal.carbs_grams != null && <span className="block">{meal.carbs_grams}g carbs</span>}
-                      {meal.calories_estimate > 0 && <span className="block">{meal.calories_estimate} kcal</span>}
-                    </div>
+                    {showMealHistory ? 'Hide History' : 'View History'}
                   </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                {nutrients.map(({ label, value, unit, warn, danger }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      <span className={`text-xs font-semibold ${textColor(value, warn, danger)}`}>
+                        {value} {unit}
+                        {value >= danger && <span className="ml-1 text-red-500">▲</span>}
+                        {value >= warn && value < danger && <span className="ml-1 text-yellow-500">!</span>}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${barColor(value, warn, danger)}`}
+                        style={{ width: `${Math.min((value / danger) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
+              {showMealHistory && data.meals?.length > 0 && (
+                <>
+                  <div className="border-t mt-4 pt-3">
+                    <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Meal History</p>
+                    <div className="divide-y">
+                      {data.meals.slice(0, 14).map(meal => (
+                        <button
+                          key={meal.id}
+                          onClick={() => setSelectedMeal(meal)}
+                          className="w-full text-left py-2.5 flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 transition"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{meal.food_name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{fmt24h(meal.meal_time)} · {fmtDate(meal.meal_time)}</p>
+                          </div>
+                          <div className="text-right text-xs text-gray-500 ml-2 shrink-0">
+                            {meal.carbs_grams != null && <span className="block">{meal.carbs_grams}g carbs</span>}
+                            {meal.calories_estimate > 0 && <span className="block">{meal.calories_estimate} kcal</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Row 4: Doctor's Notes / Goals / Upcoming Actions */}
+        <div className="space-y-4">
+          {latestRec && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4" /> Doctor's Notes
+              </h2>
+              <p className="text-sm text-blue-900 mt-2 leading-relaxed">{latestRec.content}</p>
+              <p className="text-xs text-blue-500 mt-2">
+                {doctor?.name || 'Care team'} · {fmtDate(latestRec.created_at)}
+              </p>
             </div>
           )}
-
-          {/* Right: Doctor's Notes + Goals stacked */}
-          <div className="space-y-4">
-            {latestRec && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" /> Doctor's Notes
-                </h2>
-                <p className="text-sm text-blue-900 mt-2 leading-relaxed">{latestRec.content}</p>
-                <p className="text-xs text-blue-500 mt-2">
-                  {doctor?.name || 'Care team'} · {fmtDate(latestRec.created_at)}
-                </p>
-              </div>
-            )}
-            {data.lifestyle_goals?.length > 0 && (
-              <GoalsSection goals={data.lifestyle_goals} />
-            )}
-            {(pendingReferrals.length > 0 || pendingHistoryRequests.length > 0) && (
-              <div className="bg-white rounded-xl shadow-sm p-4">
-                <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold uppercase text-gray-500">
-                  <CalendarClock className="h-4 w-4" /> Upcoming Actions
-                </h2>
-                {pendingReferrals.map(r => (
-                  <div key={r.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="text-sm font-medium">{r.referral_type}</p>
-                      <p className="text-xs text-gray-500">{r.description}</p>
-                    </div>
-                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
-                      {r.appointment_date ? fmtDate(r.appointment_date) : r.status}
-                    </span>
+          {data.lifestyle_goals?.length > 0 && (
+            <GoalsSection goals={data.lifestyle_goals} />
+          )}
+          {(pendingReferrals.length > 0 || pendingHistoryRequests.length > 0) && (
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold uppercase text-gray-500">
+                <CalendarClock className="h-4 w-4" /> Upcoming Actions
+              </h2>
+              {pendingReferrals.map(r => (
+                <div key={r.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{r.referral_type}</p>
+                    <p className="text-xs text-gray-500">{r.description}</p>
                   </div>
-                ))}
-                {pendingHistoryRequests.map(h => (
-                  <div key={h.id} className="py-2 border-b last:border-0">
-                    <p className="text-sm font-medium">Doctor's Request</p>
-                    <p className="text-xs text-gray-500 mb-2">{h.request_text}</p>
-                    <button className="text-xs bg-primary-100 text-primary-700 px-3 py-1 rounded-full font-medium"
-                      onClick={() => setActiveHistoryRequest(h)}>
-                      Respond
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                    {r.appointment_date ? fmtDate(r.appointment_date) : r.status}
+                  </span>
+                </div>
+              ))}
+              {pendingHistoryRequests.map(h => (
+                <div key={h.id} className="py-2 border-b last:border-0">
+                  <p className="text-sm font-medium">Doctor's Request</p>
+                  <p className="text-xs text-gray-500 mb-2">{h.request_text}</p>
+                  <button className="text-xs bg-primary-100 text-primary-700 px-3 py-1 rounded-full font-medium"
+                    onClick={() => setActiveHistoryRequest(h)}>
+                    Respond
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Chat Button — full width */}
