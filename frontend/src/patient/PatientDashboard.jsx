@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { MessageCircle, TrendingUp, Pill, Utensils, AlertTriangle, CalendarClock, SendHorizontal, X, Sun, Moon } from 'lucide-react'
-import { getPatientDashboard, getMedSchedule, respondToHistoryRequest } from '../shared/api'
+import { getPatientDashboard, getMedSchedule, getGlucoseProfile, respondToHistoryRequest } from '../shared/api'
 import { useTheme } from '../shared/ThemeContext'
 import GlucoseChart from '../shared/GlucoseChart'
 import MedAdherenceGrid from '../shared/MedAdherenceGrid'
@@ -20,13 +20,24 @@ function fmtDate(isoString) {
   return new Date(isoString).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function getLocalIsoDate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function PatientDashboard() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { dark, toggle } = useTheme()
   const [data, setData] = useState(null)
   const [medSchedule, setMedSchedule] = useState([])
+  const [glucoseProfile, setGlucoseProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [glucoseChartMode, setGlucoseChartMode] = useState('today')
+  const [medAdherenceMode, setMedAdherenceMode] = useState('today')
   const [modalMode, setModalMode] = useState(null)
   const [selectedMeal, setSelectedMeal] = useState(null)
   const [activeHistoryRequest, setActiveHistoryRequest] = useState(null)
@@ -35,14 +46,43 @@ export default function PatientDashboard() {
 
   useEffect(() => { loadData() }, [id])
 
+  useEffect(() => {
+    function handleStorageRefresh(event) {
+      if (event.key !== 'dashboard-refresh' || !event.newValue) return
+      try {
+        const payload = JSON.parse(event.newValue)
+        if (payload?.patientId === id) {
+          loadData()
+        }
+      } catch {
+        // Ignore malformed storage payloads
+      }
+    }
+
+    function handleCustomRefresh(event) {
+      if (event?.detail?.patientId === id) {
+        loadData()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageRefresh)
+    window.addEventListener('dashboard-refresh', handleCustomRefresh)
+    return () => {
+      window.removeEventListener('storage', handleStorageRefresh)
+      window.removeEventListener('dashboard-refresh', handleCustomRefresh)
+    }
+  }, [id])
+
   async function loadData() {
     setLoading(true)
-    const [dashRes, schedRes] = await Promise.all([
+    const [dashRes, schedRes, profileRes] = await Promise.all([
       getPatientDashboard(id),
       getMedSchedule(id),
+      getGlucoseProfile(id),
     ])
     setData(dashRes.data)
     setMedSchedule(schedRes.data?.schedule || [])
+    setGlucoseProfile(profileRes.data || null)
     setLoading(false)
   }
 
@@ -73,10 +113,12 @@ export default function PatientDashboard() {
     [...(data.meals || []), ...(data.med_logs || []), ...(data.glucose_readings || [])],
     ['meal_time', 'actual_time', 'scheduled_time', 'measurement_time'],
   )
-  const todayMeals = data.meals?.filter(m => m.meal_time?.startsWith(summaryDate)).length || 0
-  const todaysMedLogs = data.med_logs?.filter(m => (m.scheduled_time || m.actual_time)?.startsWith(summaryDate)) || []
-  const todayMedsTaken = todaysMedLogs.filter(m => m.action === 'taken').length
-  const todayMedsMissed = todaysMedLogs.filter(m => m.action === 'skipped').length
+
+  const todayIso = getLocalIsoDate()
+  const todayMeals = data.meals?.filter(m => m.meal_time?.startsWith(todayIso)).length || 0
+  const todaySchedule = medSchedule.filter(slot => slot.date === todayIso)
+  const todayMedsTaken = todaySchedule.filter(slot => slot.status === 'taken' || slot.status === 'delayed').length
+  const todayMedsMissed = todaySchedule.filter(slot => slot.status === 'missed' || slot.status === 'skipped').length
   const latestRec = data.recommendations?.find(r => r.status === 'sent')
   const pendingHistoryRequests = data.history_requests?.filter(h => h.status === 'pending') || []
   const pendingReferrals = data.referrals?.filter(r => r.status === 'pending' || r.status === 'scheduled') || []
@@ -103,7 +145,7 @@ export default function PatientDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Hello, {patient.name} 👋</h1>
-            <p className="text-primary-100 text-sm mt-1">Your health dashboard</p>
+            <p className="text-primary-100 text-sm mt-1">your health at a glance</p>
           </div>
           <button onClick={toggle} className="text-primary-200 hover:text-white transition p-1">
             {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -139,27 +181,67 @@ export default function PatientDashboard() {
         {/* Row 2: Glucose chart + Medication grid side by side */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-xl shadow-sm p-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" /> Glucose Trend (7 days)
-            </h2>
-            <GlucoseChart readings={data.glucose_readings} height={200} />
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase flex items-center gap-1">
+                <TrendingUp className="w-4 h-4" /> Glucose {glucoseChartMode === 'today' ? '(Today)' : '(7 days)'}
+              </h2>
+              <div className="inline-flex rounded-full bg-gray-100 p-1">
+                <button
+                  onClick={() => setGlucoseChartMode('today')}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    glucoseChartMode === 'today' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setGlucoseChartMode('trend')}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    glucoseChartMode === 'trend' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  7 Days
+                </button>
+              </div>
+            </div>
+            <GlucoseChart readings={data.glucose_readings} meals={data.meals} height={200} mode={glucoseChartMode} glucoseProfile={glucoseProfile} />
           </div>
           <div className="bg-white rounded-xl shadow-sm p-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
-              <Pill className="w-4 h-4" /> Medication Adherence (7 days)
-            </h2>
-            <MedAdherenceGrid schedule={medSchedule} />
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase flex items-center gap-1">
+                <Pill className="w-4 h-4" /> Medication Adherence {medAdherenceMode === 'today' ? '(Today)' : '(7 days)'}
+              </h2>
+              <div className="inline-flex rounded-full bg-gray-100 p-1">
+                <button
+                  onClick={() => setMedAdherenceMode('today')}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    medAdherenceMode === 'today' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setMedAdherenceMode('trend')}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    medAdherenceMode === 'trend' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  7 Days
+                </button>
+              </div>
+            </div>
+            <MedAdherenceGrid schedule={medSchedule} mode={medAdherenceMode} />
           </div>
         </div>
 
         {/* Row 3: Recent Meals + Doctor's Notes / Goals side by side */}
         <div className="grid grid-cols-2 gap-4">
           {/* Left: Recent Meals */}
-          {data.meals?.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm p-4">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
-                <Utensils className="w-4 h-4" /> Recent Meals
-              </h2>
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1">
+              <Utensils className="w-4 h-4" /> Recent Meals
+            </h2>
+            {data.meals?.length > 0 ? (
               <div className="divide-y">
                 {data.meals.slice(0, 7).map(meal => (
                   <button
@@ -178,53 +260,69 @@ export default function PatientDashboard() {
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                No meals logged yet. Use + to add your first meal.
+              </p>
+            )}
+          </div>
 
           {/* Right: Doctor's Notes + Goals stacked */}
           <div className="space-y-4">
-            {latestRec && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
-                  <AlertTriangle className="w-4 h-4" /> Doctor's Notes
-                </h2>
-                <p className="text-sm text-blue-900 mt-2 leading-relaxed">{latestRec.content}</p>
-                <p className="text-xs text-blue-500 mt-2">
-                  {doctor?.name || 'Care team'} · {fmtDate(latestRec.created_at)}
-                </p>
-              </div>
-            )}
-            {data.lifestyle_goals?.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-blue-800 flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4" /> Doctor's Notes
+              </h2>
+              {latestRec ? (
+                <>
+                  <p className="text-sm text-blue-900 mt-2 leading-relaxed">{latestRec.content}</p>
+                  <p className="text-xs text-blue-500 mt-2">
+                    {doctor?.name || 'Care team'} · {fmtDate(latestRec.created_at)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-blue-700 mt-2">No notes from your doctor yet.</p>
+              )}
+            </div>
+
+            {data.lifestyle_goals?.length > 0 ? (
               <GoalsSection goals={data.lifestyle_goals} />
-            )}
-            {(pendingReferrals.length > 0 || pendingHistoryRequests.length > 0) && (
-              <div className="bg-white rounded-xl shadow-sm p-4">
-                <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold uppercase text-gray-500">
-                  <CalendarClock className="h-4 w-4" /> Upcoming Actions
-                </h2>
-                {pendingReferrals.map(r => (
-                  <div key={r.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="text-sm font-medium">{r.referral_type}</p>
-                      <p className="text-xs text-gray-500">{r.description}</p>
-                    </div>
-                    <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
-                      {r.appointment_date ? fmtDate(r.appointment_date) : r.status}
-                    </span>
-                  </div>
-                ))}
-                {pendingHistoryRequests.map(h => (
-                  <div key={h.id} className="py-2 border-b last:border-0">
-                    <p className="text-sm font-medium">Doctor's Request</p>
-                    <p className="text-xs text-gray-500 mb-2">{h.request_text}</p>
-                    <button className="text-xs bg-primary-100 text-primary-700 px-3 py-1 rounded-full font-medium"
-                      onClick={() => setActiveHistoryRequest(h)}>
-                      Respond
-                    </button>
-                  </div>
-                ))}
+            ) : (
+              <div className="bg-white rounded-2xl border p-4 shadow-sm">
+                <h3 className="font-bold text-gray-800">My Goals</h3>
+                <p className="mt-2 text-sm text-gray-500">No active goals yet. Your doctor can set one during your next review.</p>
               </div>
             )}
+
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h2 className="mb-3 flex items-center gap-1 text-sm font-semibold uppercase text-gray-500">
+                <CalendarClock className="h-4 w-4" /> Upcoming Actions
+              </h2>
+              {pendingReferrals.length === 0 && pendingHistoryRequests.length === 0 && (
+                <p className="text-sm text-gray-500">No upcoming actions right now.</p>
+              )}
+              {pendingReferrals.map(r => (
+                <div key={r.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div>
+                    <p className="text-sm font-medium">{r.referral_type}</p>
+                    <p className="text-xs text-gray-500">{r.description}</p>
+                  </div>
+                  <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-800">
+                    {r.appointment_date ? fmtDate(r.appointment_date) : r.status}
+                  </span>
+                </div>
+              ))}
+              {pendingHistoryRequests.map(h => (
+                <div key={h.id} className="py-2 border-b last:border-0">
+                  <p className="text-sm font-medium">Doctor's Request</p>
+                  <p className="text-xs text-gray-500 mb-2">{h.request_text}</p>
+                  <button className="text-xs bg-primary-100 text-primary-700 px-3 py-1 rounded-full font-medium"
+                    onClick={() => setActiveHistoryRequest(h)}>
+                    Respond
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

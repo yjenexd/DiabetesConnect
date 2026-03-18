@@ -1,9 +1,64 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Send, Mic, Camera, Bot, User, ArrowLeft, RefreshCw, AlertTriangle, Wrench, Check, X } from 'lucide-react'
-import { sendChatMessage, getChatHistory, confirmMealLog } from '../shared/api'
+import { sendChatMessage, getChatHistory, confirmMealLog, logMedicationManual } from '../shared/api'
 import VoiceRecorder from './VoiceRecorder'
 import PhotoUpload from './PhotoUpload'
+
+function normaliseMealName(name) {
+  if (!name) return ''
+  return name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function dedupePendingMeals(meals = []) {
+  const bestByName = new Map()
+  const score = (meal) => ['calories_estimate', 'carbs_grams', 'protein_grams', 'fat_grams']
+    .reduce((count, key) => count + ((meal?.[key] || 0) > 0 ? 1 : 0), 0)
+
+  meals.forEach((meal) => {
+    const key = normaliseMealName(meal?.food_name)
+    if (!key) return
+
+    const current = bestByName.get(key)
+    if (!current || score(meal) > score(current)) {
+      bestByName.set(key, meal)
+    }
+  })
+
+  return Array.from(bestByName.values())
+}
+
+function normaliseMedicationKey(item) {
+  const name = (item?.medication_name || '').toLowerCase().trim()
+  const action = (item?.action || 'taken').toLowerCase().trim()
+  return `${name}|${action}`
+}
+
+function dedupePendingMedications(items = []) {
+  const unique = new Map()
+  items.forEach((item) => {
+    const key = normaliseMedicationKey(item)
+    if (!key || key === '|') return
+    if (!unique.has(key)) unique.set(key, item)
+  })
+  return Array.from(unique.values())
+}
+
+function getPhotoPreviewSrc(imageBase64) {
+  if (!imageBase64) return ''
+  return imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`
+}
+
+function notifyDashboardRefresh(patientId) {
+  const payload = JSON.stringify({ patientId, timestamp: Date.now() })
+  localStorage.setItem('dashboard-refresh', payload)
+  window.dispatchEvent(new CustomEvent('dashboard-refresh', { detail: { patientId } }))
+}
 
 function MealConfirmCard({ meal, patientId, onDone }) {
   const [status, setStatus] = useState(null) // null | 'logging' | 'logged' | 'skipped'
@@ -14,9 +69,12 @@ function MealConfirmCard({ meal, patientId, onDone }) {
       food_name: meal.food_name,
       calories_estimate: meal.calories_estimate || 0,
       carbs_grams: meal.carbs_grams || 0,
+      protein_grams: meal.protein_grams || 0,
+      fat_grams: meal.fat_grams || 0,
       meal_type: meal.meal_type || 'meal',
       cultural_context: meal.cultural_context || 'hawker_food',
     })
+    notifyDashboardRefresh(patientId)
     setStatus('logged')
     setTimeout(() => onDone(), 1500)
   }
@@ -41,6 +99,54 @@ function MealConfirmCard({ meal, patientId, onDone }) {
               className="flex items-center gap-1 rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
             >
               <Check className="w-3 h-3" /> {status === 'logging' ? 'Logging…' : 'Log this meal'}
+            </button>
+            <button
+              onClick={() => { setStatus('skipped'); setTimeout(() => onDone(), 800) }}
+              className="flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              <X className="w-3 h-3" /> Skip
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MedicationConfirmCard({ medication, patientId, onDone }) {
+  const [status, setStatus] = useState(null) // null | 'logging' | 'logged' | 'skipped'
+
+  async function handleLog() {
+    setStatus('logging')
+    await logMedicationManual(patientId, {
+      medication_name: medication.medication_name,
+      action: medication.action || 'taken',
+      reason: medication.reason_if_skipped || null,
+      scheduled_time: medication.scheduled_time || null,
+    })
+    notifyDashboardRefresh(patientId)
+    setStatus('logged')
+    setTimeout(() => onDone(), 1500)
+  }
+
+  return (
+    <div className="flex justify-start mt-1">
+      <div className="max-w-[80%] rounded-2xl rounded-bl-md border bg-green-50 px-4 py-3 shadow-sm">
+        <p className="text-[11px] font-semibold text-green-600 uppercase mb-1">Medication confirmation</p>
+        <p className="text-sm font-medium text-gray-800">{medication.medication_name}</p>
+        <p className="text-xs text-gray-500 mt-0.5">Action: {medication.action || 'taken'}</p>
+        {status === 'logged' ? (
+          <p className="mt-2 text-xs font-medium text-green-600 flex items-center gap-1"><Check className="w-3 h-3" /> Logged!</p>
+        ) : status === 'skipped' ? (
+          <p className="mt-2 text-xs text-gray-400">Skipped</p>
+        ) : (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={handleLog}
+              disabled={status === 'logging'}
+              className="flex items-center gap-1 rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              <Check className="w-3 h-3" /> {status === 'logging' ? 'Logging…' : 'Log medication'}
             </button>
             <button
               onClick={() => { setStatus('skipped'); setTimeout(() => onDone(), 800) }}
@@ -91,13 +197,16 @@ export default function ChatInterface() {
   }
 
   function buildAssistantMessage(data, fallbackContent) {
+    const pendingMeals = dedupePendingMeals(data?.pending_meals || [])
+    const pendingMedications = dedupePendingMedications(data?.pending_medications || [])
     return {
       role: 'assistant',
       content: data?.response || fallbackContent,
       timestamp: new Date().toISOString(),
       toolsCalled: data?.tools_called || [],
       alertsGenerated: data?.alerts_generated || [],
-      pendingMeals: data?.pending_meals || [],
+      pendingMeals,
+      pendingMedications,
     }
   }
 
@@ -115,9 +224,10 @@ export default function ChatInterface() {
     const isVoice = inputType === 'voice' && audioBase64
     const userMsg = {
       role: 'user',
-      content: trimmedText || (isVoice ? '🎙️ Recording…' : 'Meal photo'),
+      content: trimmedText || (isVoice ? '🎙️ Recording…' : '📷 Meal photo'),
       timestamp: new Date().toISOString(),
       isVoice,
+      imageBase64: inputType === 'photo' ? imageBase64 : null,
     }
 
     setRequestError('')
@@ -248,6 +358,13 @@ export default function ChatInterface() {
                 </span>
               </div>
               <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === 'user' && msg.imageBase64 && (
+                <img
+                  src={getPhotoPreviewSrc(msg.imageBase64)}
+                  alt="Uploaded meal"
+                  className="mt-2 max-h-52 w-full rounded-xl object-cover"
+                />
+              )}
               {msg.role === 'assistant' && Boolean(msg.toolsCalled?.length || msg.alertsGenerated?.length) && (
                 <div className="mt-3 space-y-2">
                   {msg.toolsCalled?.length > 0 && (
@@ -277,7 +394,7 @@ export default function ChatInterface() {
           </div>
           {/* Meal confirmation cards */}
 
-          {msg.role === 'assistant' && msg.pendingMeals?.map((meal, mealIdx) => (
+          {msg.role === 'assistant' && dedupePendingMeals(msg.pendingMeals || []).map((meal, mealIdx) => (
             <MealConfirmCard
               key={`${i}-meal-${mealIdx}`}
               meal={meal}
@@ -285,9 +402,29 @@ export default function ChatInterface() {
               onDone={() => {
                 setMessages(prev => prev.map((m, mi) => {
                   if (mi !== i) return m
-                  const updated = [...(m.pendingMeals || [])]
-                  updated.splice(mealIdx, 1)
+                  const targetKey = normaliseMealName(meal.food_name)
+                  const updated = (m.pendingMeals || []).filter(
+                    pendingMeal => normaliseMealName(pendingMeal.food_name) !== targetKey,
+                  )
                   return { ...m, pendingMeals: updated }
+                }))
+              }}
+            />
+          ))}
+
+          {msg.role === 'assistant' && dedupePendingMedications(msg.pendingMedications || []).map((medication, medIdx) => (
+            <MedicationConfirmCard
+              key={`${i}-med-${medIdx}`}
+              medication={medication}
+              patientId={id}
+              onDone={() => {
+                setMessages(prev => prev.map((m, mi) => {
+                  if (mi !== i) return m
+                  const targetKey = normaliseMedicationKey(medication)
+                  const updated = (m.pendingMedications || []).filter(
+                    pendingMedication => normaliseMedicationKey(pendingMedication) !== targetKey,
+                  )
+                  return { ...m, pendingMedications: updated }
                 }))
               }}
             />

@@ -13,6 +13,7 @@ async def log_meal(patient_id: str, food_name: str, calories_estimate: int, carb
     """Stage a meal for user confirmation instead of auto-logging."""
     return {
         "pending_confirmation": True,
+        "confirmation_type": "meal",
         "patient_id": patient_id,
         "food_name": food_name,
         "calories_estimate": calories_estimate,
@@ -37,12 +38,32 @@ async def confirm_log_meal(patient_id: str, food_name: str, calories_estimate: i
 
 
 async def log_medication(patient_id: str, medication_name: str, action: str, reason: str = None, **_) -> dict:
-    log_id = uid()
-    await execute(
-        "INSERT INTO med_logs (id, patient_id, medication_name, action, actual_time, reason_if_skipped, logged_via) VALUES (?,?,?,?,?,?,?)",
-        (log_id, patient_id, medication_name, action, datetime.now().isoformat(), reason, "chatbot")
+    meds = await fetch_all(
+        "SELECT name, frequency FROM medications WHERE patient_id = ? AND active = 1",
+        (patient_id,),
     )
-    return {"success": True, "log_id": log_id, "medication_name": medication_name, "action": action}
+
+    selected_name = medication_name
+    selected_frequency = None
+    lowered_target = (medication_name or "").strip().lower()
+    if meds:
+        exact = next((m for m in meds if (m.get("name") or "").strip().lower() == lowered_target), None)
+        partial = next((m for m in meds if lowered_target and lowered_target in (m.get("name") or "").lower()), None)
+        fallback = meds[0] if len(meds) == 1 else None
+        chosen = exact or partial or fallback
+        if chosen:
+            selected_name = chosen.get("name") or medication_name
+            selected_frequency = chosen.get("frequency")
+
+    return {
+        "pending_confirmation": True,
+        "confirmation_type": "medication",
+        "patient_id": patient_id,
+        "medication_name": selected_name,
+        "action": action,
+        "reason_if_skipped": reason,
+        "frequency": selected_frequency,
+    }
 
 
 async def log_glucose(patient_id: str, value_mmol: float, context: str = "fasting", **_) -> dict:
@@ -90,13 +111,20 @@ async def get_active_referrals(patient_id: str, **_) -> dict:
 
 
 async def analyse_meal_photo(patient_id: str, description: str, meal_context: str = "hawker_food", **_) -> dict:
-    """Log a meal identified from a food photo (Claude Vision provides the description)."""
-    meal_id = uid()
-    await execute(
-        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?)",
-        (meal_id, patient_id, description, 0, 0.0, datetime.now().isoformat(), "meal", meal_context, "photo")
-    )
-    return {"success": True, "meal_id": meal_id, "description": description, "note": "Calories and carbs to be estimated by assistant"}
+    """Stage a photo-detected meal for user confirmation instead of auto-logging."""
+    return {
+        "pending_confirmation": True,
+        "confirmation_type": "meal",
+        "patient_id": patient_id,
+        "food_name": description,
+        "calories_estimate": 0,
+        "carbs_grams": 0.0,
+        "protein_grams": 0.0,
+        "fat_grams": 0.0,
+        "meal_type": "meal",
+        "cultural_context": meal_context,
+        "source": "photo",
+    }
 
 
 # ── Dispatcher ──

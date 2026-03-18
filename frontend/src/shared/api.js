@@ -13,6 +13,15 @@ export function connectChatWebSocket(patientId) {
 
 // ── Patient APIs ──
 
+export async function listPatients() {
+  try {
+    const { data } = await api.get(`/api/patients`)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not load patient list') }
+  }
+}
+
 export async function getPatientDashboard(patientId) {
   try {
     const { data } = await api.get(`/api/patients/${patientId}/dashboard`)
@@ -97,6 +106,15 @@ export async function getMedSchedule(patientId) {
     return { data, error: null }
   } catch (e) {
     return { data: null, error: getErrorMessage(e, 'Could not load medication schedule') }
+  }
+}
+
+export async function getGlucoseProfile(patientId) {
+  try {
+    const { data } = await api.get(`/api/patients/${patientId}/glucose-profile`)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not load glucose profile') }
   }
 }
 
