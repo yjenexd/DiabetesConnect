@@ -17,6 +17,189 @@ _id_counter = count(1)
 def uid() -> str:
     return f"{next(_id_counter):08x}"
 
+
+async def _patient_row_count(db, table: str, patient_id: str) -> int:
+    cursor = await db.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE patient_id = ?", (patient_id,))
+    row = await cursor.fetchone()
+    return int(dict(row)["cnt"]) if row else 0
+
+
+async def _seed_non_ah_kow_dashboard_features(db, dr_tan_id: str, base_date: datetime):
+    """Ensure non-Ah-Kow demo patients have complete dashboard feature data.
+
+    This is idempotent and can safely run on already-seeded databases.
+    """
+    plans = [
+        {
+            "patient_id": "siti_001",
+            "meal_template": [
+                ("Oatmeal with banana", 320, 48, 9, 8, "breakfast", "home_cooked"),
+                ("Grilled fish with brown rice", 520, 58, 32, 14, "lunch", "home_cooked"),
+                ("Vegetable soup with tofu", 380, 32, 22, 12, "dinner", "home_cooked"),
+            ],
+            "goal": ("daily_walk", 30, "minutes", "Walk at least 30 minutes after dinner."),
+            "referral": ("Dietitian Consult", "Nutrition counseling for Ramadan meal planning", "2026-04-05"),
+            "history_request": "Please share any episodes of dizziness or hypoglycemia in the last 2 weeks.",
+            "recommendation": "Great consistency this week, Puan Siti. Keep your evening walks and maintain balanced carbs at each meal.",
+            "goal_compliance": 0.72,
+        },
+        {
+            "patient_id": "ravi_001",
+            "meal_template": [
+                ("Idli with sambar", 340, 52, 11, 6, "breakfast", "home_cooked"),
+                ("Chapati with dal", 490, 62, 19, 12, "lunch", "home_cooked"),
+                ("Tandoori chicken salad", 430, 24, 38, 16, "dinner", "restaurant"),
+            ],
+            "goal": ("daily_carb_limit", 220, "grams_per_day", "Keep daily carb intake under 220g and avoid sweet drinks."),
+            "referral": ("Foot Screening", "Routine diabetic foot risk assessment", "2026-04-10"),
+            "history_request": "Please share your home blood pressure readings for the past week.",
+            "recommendation": "Mr Ravi, your readings are improving. Continue reducing sweetened drinks and stay consistent with medications.",
+            "goal_compliance": 0.61,
+        },
+        {
+            "patient_id": "weilin_001",
+            "meal_template": [
+                ("Wholegrain toast with eggs", 360, 28, 21, 14, "breakfast", "home_cooked"),
+                ("Salmon poke bowl", 540, 46, 34, 20, "lunch", "restaurant"),
+                ("Stir-fry vegetables with tofu", 410, 30, 24, 16, "dinner", "home_cooked"),
+            ],
+            "goal": ("post_meal_walk", 20, "minutes", "Take a 20-minute walk after lunch on weekdays."),
+            "referral": ("Eye Screening", "Type 1 annual retinal screening", "2026-04-12"),
+            "history_request": "Please share any overnight low-sugar episodes this month.",
+            "recommendation": "Wei Lin, your trend is stable. Keep post-meal activity and monitor for overnight lows.",
+            "goal_compliance": 0.79,
+        },
+    ]
+
+    reference_day = base_date + timedelta(days=13)
+
+    def enrich_uid() -> str:
+        return f"enr_{uid()}"
+
+    for plan in plans:
+        patient_id = plan["patient_id"]
+
+        if await _patient_row_count(db, "meals", patient_id) == 0:
+            for offset in range(7):
+                day = reference_day - timedelta(days=6 - offset)
+                breakfast, lunch, dinner = plan["meal_template"]
+                for meal, meal_time in ((breakfast, day.replace(hour=8, minute=0)), (lunch, day.replace(hour=12, minute=30)), (dinner, day.replace(hour=19, minute=0))):
+                    await db.execute(
+                        "INSERT INTO meals (id, patient_id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, meal_time, meal_type, cultural_context, logged_via) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (enrich_uid(), patient_id, meal[0], meal[1], meal[2], meal[3], meal[4], meal_time.isoformat(), meal[5], meal[6], "chatbot")
+                    )
+
+        if await _patient_row_count(db, "med_logs", patient_id) == 0:
+            med_cursor = await db.execute(
+                "SELECT id, name FROM medications WHERE patient_id = ? AND active = 1 ORDER BY prescribed_at ASC LIMIT 1",
+                (patient_id,),
+            )
+            med_row = await med_cursor.fetchone()
+            if med_row:
+                medication_id = dict(med_row)["id"]
+                medication_name = dict(med_row)["name"]
+                for offset in range(7):
+                    day = reference_day - timedelta(days=6 - offset)
+                    skipped = offset in {2, 5}
+                    action = "skipped" if skipped else "taken"
+                    await db.execute(
+                        "INSERT INTO med_logs (id, patient_id, medication_id, medication_name, action, scheduled_time, actual_time, reason_if_skipped, logged_via) VALUES (?,?,?,?,?,?,?,?,?)",
+                        (
+                            enrich_uid(),
+                            patient_id,
+                            medication_id,
+                            medication_name,
+                            action,
+                            day.replace(hour=20).isoformat(),
+                            None if skipped else day.replace(hour=20, minute=10).isoformat(),
+                            "Forgot" if skipped else None,
+                            "chatbot",
+                        ),
+                    )
+
+        if await _patient_row_count(db, "lifestyle_goals", patient_id) == 0:
+            goal_type, target_value, target_unit, goal_description = plan["goal"]
+            action_id = enrich_uid()
+            await db.execute(
+                "INSERT INTO doctor_actions (id, patient_id, doctor_id, action_type, action_data, status, created_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    action_id,
+                    patient_id,
+                    dr_tan_id,
+                    "lifestyle_change",
+                    f'{{"goal_type":"{goal_type}","target_value":{target_value},"target_unit":"{target_unit}","description":"{goal_description}"}}',
+                    "active",
+                    (reference_day - timedelta(days=1)).isoformat(),
+                ),
+            )
+            await db.execute(
+                "INSERT INTO lifestyle_goals (id, patient_id, action_id, goal_type, target_value, target_unit, description, active, compliance_rate) VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    enrich_uid(),
+                    patient_id,
+                    action_id,
+                    goal_type,
+                    target_value,
+                    target_unit,
+                    goal_description,
+                    1,
+                    plan["goal_compliance"],
+                ),
+            )
+
+        if await _patient_row_count(db, "referrals", patient_id) == 0:
+            referral_type, referral_desc, appointment_date = plan["referral"]
+            action_id = enrich_uid()
+            await db.execute(
+                "INSERT INTO doctor_actions (id, patient_id, doctor_id, action_type, action_data, status, created_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    action_id,
+                    patient_id,
+                    dr_tan_id,
+                    "referral",
+                    f'{{"referral_type":"{referral_type}","description":"{referral_desc}","appointment_date":"{appointment_date}"}}',
+                    "active",
+                    reference_day.isoformat(),
+                ),
+            )
+            await db.execute(
+                "INSERT INTO referrals (id, patient_id, action_id, referral_type, description, appointment_date, status) VALUES (?,?,?,?,?,?,?)",
+                (enrich_uid(), patient_id, action_id, referral_type, referral_desc, appointment_date, "pending"),
+            )
+
+        if await _patient_row_count(db, "history_requests", patient_id) == 0:
+            action_id = enrich_uid()
+            await db.execute(
+                "INSERT INTO doctor_actions (id, patient_id, doctor_id, action_type, action_data, status, created_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    action_id,
+                    patient_id,
+                    dr_tan_id,
+                    "request_history",
+                    f'{{"request_text":"{plan["history_request"]}"}}',
+                    "active",
+                    reference_day.isoformat(),
+                ),
+            )
+            await db.execute(
+                "INSERT INTO history_requests (id, patient_id, action_id, request_text, status) VALUES (?,?,?,?,?)",
+                (enrich_uid(), patient_id, action_id, plan["history_request"], "pending"),
+            )
+
+        if await _patient_row_count(db, "recommendations", patient_id) == 0:
+            await db.execute(
+                "INSERT INTO recommendations (id, patient_id, doctor_id, recommendation_type, content, status, created_at) VALUES (?,?,?,?,?,?,?)",
+                (
+                    enrich_uid(),
+                    patient_id,
+                    dr_tan_id,
+                    "lifestyle",
+                    plan["recommendation"],
+                    "sent",
+                    reference_day.isoformat(),
+                ),
+            )
+
 async def seed_all(*, init_db_already_ran: bool = False):
     """Populate the database with demo data."""
     if not init_db_already_ran:
@@ -27,7 +210,10 @@ async def seed_all(*, init_db_already_ran: bool = False):
         cursor = await db.execute("SELECT COUNT(*) as cnt FROM patients")
         row = await cursor.fetchone()
         if row and dict(row)["cnt"] > 0:
-            print("Database already seeded. Skipping.")
+            print("Database already seeded. Applying demo data enrichment...")
+            await _seed_non_ah_kow_dashboard_features(db, "dr_tan_001", datetime(2026, 3, 2, 7, 30))
+            await db.commit()
+            print("✅ Enrichment complete.")
             return
 
         print("Seeding database...")
@@ -312,6 +498,9 @@ async def seed_all(*, init_db_already_ran: bool = False):
                 msg
             )
         print("✓ Chat messages seeded")
+
+        await _seed_non_ah_kow_dashboard_features(db, dr_tan_id, base_date)
+        print("✓ Non-Ah-Kow dashboard feature data seeded")
 
         await db.commit()
         print("\n✅ Database seeded successfully!")

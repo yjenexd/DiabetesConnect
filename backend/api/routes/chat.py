@@ -39,6 +39,9 @@ async def send_chat_message(req: ChatRequest):
         "alerts_generated": result.get("agent3_alerts", []),
         "transcribed_text": result.get("transcribed_text", ""),
         "pending_meals": result.get("pending_meals", []),
+        "pending_medications": result.get("pending_medications", []),
+        "pending_tasks": result.get("pending_tasks", []),
+        "photo_detected_items": result.get("photo_detected_items", {"foods": [], "drinks": []}),
     }
 
 
@@ -72,7 +75,7 @@ async def confirm_meal(patient_id: str, meal: MealConfirmRequest):
 async def get_chat_history(patient_id: str, limit: int = 50):
     """Get chat history for a patient."""
     messages = await fetch_all(
-        "SELECT id, role, content, language, timestamp FROM chat_messages WHERE patient_id = ? ORDER BY timestamp ASC LIMIT ?",
+        "SELECT id, role, content, language, timestamp FROM chat_messages WHERE patient_id = ? ORDER BY timestamp ASC, rowid ASC LIMIT ?",
         (patient_id, limit),
     )
     return {"patient_id": patient_id, "messages": messages}
@@ -102,6 +105,9 @@ async def websocket_chat(websocket: WebSocket, patient_id: str):
                 "language": result.get("detected_language", "english"),
                 "tools_called": [t["tool"] for t in result.get("tool_results", [])],
                 "alerts_generated": result.get("agent3_alerts", []),
+                "pending_medications": result.get("pending_medications", []),
+                "pending_tasks": result.get("pending_tasks", []),
+                "photo_detected_items": result.get("photo_detected_items", {"foods": [], "drinks": []}),
             })
     except WebSocketDisconnect:
         pass
