@@ -307,24 +307,32 @@ export default function PatientDashboard() {
                 <div className="border-t mt-4 pt-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Meal History</p>
                   {data.meals?.length > 0 ? (
-                    <div className="divide-y">
-                      {data.meals.slice(0, 14).map(meal => (
-                        <button
-                          key={meal.id}
-                          onClick={() => setSelectedMeal(meal)}
-                          className="w-full text-left py-2.5 flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 transition"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{meal.food_name}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{fmt24h(meal.meal_time)} · {fmtDate(meal.meal_time)}</p>
-                          </div>
-                          <div className="text-right text-xs text-gray-500 ml-2 shrink-0">
-                            {meal.carbs_grams != null && <span className="block">{meal.carbs_grams}g carbs</span>}
-                            {meal.calories_estimate > 0 && <span className="block">{meal.calories_estimate} kcal</span>}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="divide-y">
+                        {data.meals.slice(0, 10).map(meal => (
+                          <button
+                            key={meal.id}
+                            onClick={() => setSelectedMeal(meal)}
+                            className="w-full text-left py-2.5 flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 transition"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-gray-800">{meal.food_name}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{fmt24h(meal.meal_time)} · {fmtDate(meal.meal_time)}</p>
+                            </div>
+                            <div className="text-right text-xs text-gray-500 ml-2 shrink-0">
+                              {meal.carbs_grams != null && <span className="block">{meal.carbs_grams}g carbs</span>}
+                              {meal.calories_estimate > 0 && <span className="block">{meal.calories_estimate} kcal</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => navigate(`/patient/${id}/meals`)}
+                        className="mt-3 w-full text-center text-xs text-primary-600 font-medium hover:text-primary-800 transition py-1"
+                      >
+                        View Full History →
+                      </button>
+                    </>
                   ) : (
                     <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
                       No meals logged yet. Use + to add your first meal.
@@ -417,7 +425,12 @@ export default function PatientDashboard() {
 
       {/* Meal Detail Modal */}
       {selectedMeal && (
-        <MealDetailModal meal={selectedMeal} onClose={() => setSelectedMeal(null)} />
+        <MealDetailModal
+          meal={selectedMeal}
+          patientId={id}
+          onClose={() => setSelectedMeal(null)}
+          onUpdated={() => { setSelectedMeal(null); loadData() }}
+        />
       )}
 
       {/* History Response Modal */}

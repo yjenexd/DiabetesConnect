@@ -281,6 +281,56 @@ async def log_meal_manual(patient_id: str, meal: MealLog):
     return {"success": True, "meal_id": meal_id}
 
 
+@router.get("/patients/{patient_id}/meals")
+async def get_meals(patient_id: str, period: str = "all"):
+    """Get all meals for a patient, optionally filtered by period: week, month, year, all."""
+    patient = await fetch_one("SELECT id FROM patients WHERE id = ?", (patient_id,))
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    from datetime import date, timedelta
+    cutoff = None
+    today = date.today()
+    if period == "week":
+        cutoff = (today - timedelta(days=7)).isoformat()
+    elif period == "month":
+        cutoff = (today - timedelta(days=30)).isoformat()
+    elif period == "year":
+        cutoff = (today - timedelta(days=365)).isoformat()
+    if cutoff:
+        meals = await fetch_all(
+            "SELECT id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, sodium_mg, sugar_grams, meal_time, meal_type, cultural_context, logged_via FROM meals WHERE patient_id = ? AND meal_time >= ? ORDER BY meal_time DESC",
+            (patient_id, cutoff)
+        )
+    else:
+        meals = await fetch_all(
+            "SELECT id, food_name, calories_estimate, carbs_grams, protein_grams, fat_grams, sodium_mg, sugar_grams, meal_time, meal_type, cultural_context, logged_via FROM meals WHERE patient_id = ? ORDER BY meal_time DESC",
+            (patient_id,)
+        )
+    return {"meals": meals}
+
+
+@router.put("/patients/{patient_id}/meals/{meal_id}")
+async def update_meal(patient_id: str, meal_id: str, meal: MealLog):
+    row = await fetch_one("SELECT id FROM meals WHERE id = ? AND patient_id = ?", (meal_id, patient_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    await execute(
+        "UPDATE meals SET food_name=?, calories_estimate=?, carbs_grams=?, protein_grams=?, fat_grams=?, sodium_mg=?, sugar_grams=?, meal_type=? WHERE id=? AND patient_id=?",
+        (meal.food_name, meal.calories_estimate, meal.carbs_grams, meal.protein_grams,
+         meal.fat_grams, meal.sodium_mg, meal.sugar_grams, meal.meal_type, meal_id, patient_id)
+    )
+    return {"success": True}
+
+
+@router.delete("/patients/{patient_id}/meals/{meal_id}")
+async def delete_meal(patient_id: str, meal_id: str):
+    row = await fetch_one("SELECT id FROM meals WHERE id = ? AND patient_id = ?", (meal_id, patient_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    await execute("DELETE FROM meals WHERE id = ? AND patient_id = ?", (meal_id, patient_id))
+    return {"success": True}
+
+
 class GlucoseLog(BaseModel):
     value_mmol: float
     context: str = "fasting"

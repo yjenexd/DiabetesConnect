@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { Plus, Utensils, Droplet, Pill, X } from 'lucide-react'
+import { Plus, Utensils, Droplet, Pill, X, MessageCircle } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
 
 export default function FloatingActionButton({ onSelect }) {
+  const navigate = useNavigate()
+  const { id } = useParams()
   const [open, setOpen] = useState(false)
 
   const actions = [
@@ -11,12 +14,12 @@ export default function FloatingActionButton({ onSelect }) {
   ]
 
   return (
-    <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
+    <div className="fixed bottom-6 right-6 z-40">
       {/* Expanded actions */}
       {open && (
         <>
           <div className="fixed inset-0 bg-black/20" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-20 left-1/2 mb-2 flex -translate-x-1/2 flex-col gap-3 items-center">
+          <div className="absolute bottom-20 right-0 mb-2 flex flex-col gap-3 items-end">
             {actions.map(a => (
               <button
                 key={a.id}
@@ -35,7 +38,15 @@ export default function FloatingActionButton({ onSelect }) {
         </>
       )}
 
-      {/* Main button */}
+      {/* Chat button */}
+      <button
+        onClick={() => navigate(`/patient/${id}/chat`)}
+        className="mb-3 h-16 w-16 rounded-full bg-primary-600 hover:bg-primary-700 shadow-lg flex items-center justify-center text-white transition"
+      >
+        <MessageCircle className="w-7 h-7" />
+      </button>
+
+      {/* Main + button */}
       <button
         onClick={() => setOpen(!open)}
         className={`h-16 w-16 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${

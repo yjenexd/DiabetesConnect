@@ -64,6 +64,33 @@ export async function logMealManual(patientId, meal) {
   }
 }
 
+export async function getMeals(patientId, period = 'all') {
+  try {
+    const { data } = await api.get(`/api/patients/${patientId}/meals`, { params: { period } })
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not load meals') }
+  }
+}
+
+export async function updateMeal(patientId, mealId, meal) {
+  try {
+    const { data } = await api.put(`/api/patients/${patientId}/meals/${mealId}`, meal)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not update meal') }
+  }
+}
+
+export async function deleteMeal(patientId, mealId) {
+  try {
+    const { data } = await api.delete(`/api/patients/${patientId}/meals/${mealId}`)
+    return { data, error: null }
+  } catch (e) {
+    return { data: null, error: getErrorMessage(e, 'Could not delete meal') }
+  }
+}
+
 export async function logGlucoseManual(patientId, reading) {
   try {
     const { data } = await api.post(`/api/patients/${patientId}/glucose`, reading)
