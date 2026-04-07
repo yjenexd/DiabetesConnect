@@ -69,3 +69,8 @@ DiabetesConnect is an AI-assisted diabetes care platform built for a Singapore h
 - Patient detail screen showing metrics, alerts, medication adherence, glucose trends, AI analysis, and doctor actions connected to the backend: `frontend/src/doctor/PatientDetail.jsx`, `frontend/src/doctor/AIAnalysisPanel.jsx`, `frontend/src/doctor/ActionForms.jsx`
 - Recommendation flow that drafts, previews, and sends patient-facing notes, with a doctor-only preview path that distinguishes visible notes from hidden draft/preview recommendations: `frontend/src/doctor/RecommendationComposer.jsx`, `frontend/src/doctor/DashboardPreview.jsx`
 - "View as Patient" modal for checking the actual patient-visible dashboard state before or after clinician actions: `frontend/src/doctor/PatientViewModal.jsx`
+
+
+https://github.com/user-attachments/assets/5b468030-b7b2-46c0-aba8-5d6dac0502b2
+
+
